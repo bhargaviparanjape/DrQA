@@ -11,7 +11,8 @@ import os
 import sys
 import json
 import time
-
+from os.path import dirname,realpath
+sys.path.append(dirname(dirname(dirname(realpath(__file__)))))
 from multiprocessing import Pool
 from multiprocessing.util import Finalize
 from functools import partial
