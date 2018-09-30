@@ -40,6 +40,7 @@ def tokenize(text):
         'pos': tokens.pos(),
         'lemma': tokens.lemmas(),
         'ner': tokens.entities(),
+        'sentence_boundaries' : tokens.sentences(),
     }
     return output
 
@@ -56,7 +57,7 @@ def load_dataset(path):
     output = {'qids': [], 'questions': [], 'answers': [],
               'contexts': [], 'qid2cid': []}
     for idx, article in enumerate(data):
-        if idx > 10 and args.truncate:
+        if idx > 1 and args.truncate:
             break
         for paragraph in article['paragraphs']:
             output['contexts'].append(paragraph['context'])
@@ -83,7 +84,8 @@ def process_dataset(data, tokenizer, workers=None):
     """Iterate processing (tokenize, parse, etc) dataset multithreaded."""
     tokenizer_class = tokenizers.get_class(tokenizer)
     make_pool = partial(Pool, workers, initializer=init)
-    workers = make_pool(initargs=(tokenizer_class, {'annotators': {'lemma'}}))
+
+    workers = make_pool(initargs=(tokenizer_class, {'annotators': {'lemma'}, 'classpath' : "/home/bhargavi/robust_nlp/invariance/DrQA/data/corenlp/*"}))
     q_tokens = workers.map(tokenize, data['questions'])
     workers.close()
     workers.join()
@@ -95,6 +97,15 @@ def process_dataset(data, tokenizer, workers=None):
     workers.close()
     workers.join()
 
+    ## code to override Pool
+    # init(tokenizer_class, {'annotators': {'lemma'}, 'classpath' : "/home/bhargavi/robust_nlp/invariance/DrQA/data/corenlp/*"})
+    # q_tokens = []
+    # for idx in range(len(data['questions'])):
+    #     q_tokens.append(tokenize(data['questions'][idx]))
+    # c_tokens = []
+    # for idx in range(len(data['contexts'])):
+    #     c_tokens.append(tokenize(data['contexts'][idx]))
+
     for idx in range(len(data['qids'])):
         question = q_tokens[idx]['words']
         qlemma = q_tokens[idx]['lemma']
@@ -103,6 +114,7 @@ def process_dataset(data, tokenizer, workers=None):
         lemma = c_tokens[data['qid2cid'][idx]]['lemma']
         pos = c_tokens[data['qid2cid'][idx]]['pos']
         ner = c_tokens[data['qid2cid'][idx]]['ner']
+        context_sentence_boundaries = c_tokens[data['qid2cid'][idx]]['sentence_boundaries']
         ans_tokens = []
         if len(data['answers']) > 0:
             for ans in data['answers'][idx]:
@@ -111,7 +123,20 @@ def process_dataset(data, tokenizer, workers=None):
                                     ans['answer_start'] + len(ans['text']))
                 if found:
                     ans_tokens.append(found)
-        ## sentences and gold_sentence_ids
+        ## sentences
+        ans_tokens_list = list(set(ans_tokens))
+        sentences = []
+        gold_sentence_ids = []
+        for idx, tup in enumerate(context_sentence_boundaries):
+            for a in ans_tokens_list:
+                if a[0] >= tup[0] and a[1] < tup[1]:
+                    gold_sentence_ids.append(idx)
+            sentence = document[tup[0]:tup[1]]
+            sentences.append(sentence)
+        gold_sentence_ids_set = list(set(gold_sentence_ids))
+        if len(gold_sentence_ids_set) == 0:
+            print("No golden sentence available")
+        ## gold_sentence_id
         yield {
             'id': data['qids'][idx],
             'question': question,
@@ -122,6 +147,8 @@ def process_dataset(data, tokenizer, workers=None):
             'lemma': lemma,
             'pos': pos,
             'ner': ner,
+            'sentences': sentences,
+            'gold_sentence_ids' : gold_sentence_ids_set,
         }
 
 

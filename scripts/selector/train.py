@@ -16,8 +16,8 @@ import subprocess
 import logging
 
 
-from drqa.reader import utils, vector, config, data
-from drqa.reader import DocReader
+from drqa.selector import utils, vector, config, data
+from drqa.selector import SentenceSelector
 from drqa import DATA_DIR as DRQA_DATA
 
 logger = logging.getLogger()
@@ -190,7 +190,7 @@ def init_from_scratch(args, train_exs, dev_exs):
     logger.info('Num words = %d' % len(word_dict))
 
     # Initialize model
-    model = DocReader(config.get_model_args(args), word_dict, feature_dict)
+    model = SentenceSelector(config.get_model_args(args), word_dict, feature_dict)
 
     # Load pretrained embeddings for words in dictionary
     if args.embedding_file:
@@ -381,13 +381,13 @@ def main(args):
         # Just resume training, no modifications.
         logger.info('Found a checkpoint...')
         checkpoint_file = args.model_file + '.checkpoint'
-        model, start_epoch = DocReader.load_checkpoint(checkpoint_file, args)
+        model, start_epoch = SentenceSelector.load_checkpoint(checkpoint_file, args)
     else:
         # Training starts fresh. But the model state is either pretrained or
         # newly (randomly) initialized.
         if args.pretrained:
             logger.info('Using pretrained model...')
-            model = DocReader.load(args.pretrained, args)
+            model = SentenceSelector.load(args.pretrained, args)
             if args.expand_dictionary:
                 logger.info('Expanding dictionary for new data...')
                 # Add words in training + dev examples

@@ -8,7 +8,6 @@
 
 import copy
 
-
 class Tokens(object):
     """A class to represent a list of tokenized text."""
     TEXT = 0
@@ -18,8 +17,9 @@ class Tokens(object):
     LEMMA = 4
     NER = 5
 
-    def __init__(self, data, annotators, opts=None):
+    def __init__(self, data, sentence_boundaries, annotators, opts=None):
         self.data = data
+        self.sentence_boundaries = sentence_boundaries
         self.annotators = annotators
         self.opts = opts or {}
 
@@ -36,6 +36,16 @@ class Tokens(object):
     def untokenize(self):
         """Returns the original text (with whitespace reinserted)."""
         return ''.join([t[self.TEXT_WS] for t in self.data]).strip()
+
+    def sentences(self):
+        sentences = []
+        for idx, tup in enumerate(self.sentence_boundaries):
+            sentence = [t[self.TEXT].lower() for t in self.data[tup[0]:tup[1]]]
+            sentences.append(sentence)
+        return sentences
+
+    def sentences(self):
+        return self.sentence_boundaries
 
     def words(self, uncased=False):
         """Returns a list of the text of each token

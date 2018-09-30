@@ -102,6 +102,14 @@ class CoreNLPTokenizer(Tokenizer):
 
         data = []
         tokens = [t for s in output['sentences'] for t in s['tokens']]
+        ## define sentence boundaries variable
+        sentence_boundaries = []
+        curr = 0
+        for s in output['sentences']:
+            sentence_tokens = s['tokens']
+            sentence_boundaries.append((curr, curr + len(sentence_tokens)))
+            curr += len(sentence_tokens)
+
         for i in range(len(tokens)):
             # Get whitespace
             start_ws = tokens[i]['characterOffsetBegin']
@@ -119,4 +127,4 @@ class CoreNLPTokenizer(Tokenizer):
                 tokens[i].get('lemma', None),
                 tokens[i].get('ner', None)
             ))
-        return Tokens(data, self.annotators)
+        return Tokens(data, sentence_boundaries, self.annotators)
