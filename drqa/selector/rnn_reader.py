@@ -39,6 +39,7 @@ class RnnDocReader(nn.Module):
             doc_input_size += args.embedding_dim
 
         # RNN document encoder
+        ## this needs to run across sentences
         self.doc_rnn = layers.StackedBRNN(
             input_size=doc_input_size,
             hidden_size=args.hidden_size,
@@ -76,6 +77,7 @@ class RnnDocReader(nn.Module):
             self.self_attn = layers.LinearSeqAttn(question_hidden_size)
 
         # Bilinear attention for span start/end
+        ## simple mlp to score these sentences
         self.start_attn = layers.BilinearSeqAttn(
             doc_hidden_size,
             question_hidden_size,

@@ -20,7 +20,7 @@ def set_default(key, value):
     global DEFAULTS
     DEFAULTS[key] = value
 
-from .model import DocReader
+from .model import SentenceSelector
 from .predictor import Predictor
 from . import config
 from . import vector
