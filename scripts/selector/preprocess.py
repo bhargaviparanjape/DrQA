@@ -58,9 +58,11 @@ def load_dataset(path):
     output = {'qids': [], 'questions': [], 'answers': [],
               'contexts': [], 'qid2cid': []}
     for idx, article in enumerate(data):
-        if idx > 1 and args.truncate:
+        if idx > 2 and args.truncate:
             break
-        for paragraph in article['paragraphs']:
+        for i, paragraph in enumerate(article['paragraphs']):
+            if i > 10:
+                break
             output['contexts'].append(paragraph['context'])
             for qa in paragraph['qas']:
                 output['qids'].append(qa['id'])
@@ -93,7 +95,7 @@ def process_dataset(data, tokenizer, workers=None):
     workers.join()
 
     workers = make_pool(
-        initargs=(tokenizer_class, {'annotators': {'lemma', 'pos', 'ner'}})
+        initargs=(tokenizer_class, {'annotators': {'lemma', 'pos', 'ner'},'classpath' : "/home/bhargavi/robust_nlp/invariance/DrQA/data/corenlp/*"})
     )
     c_tokens = workers.map(tokenize, data['contexts'])
     workers.close()
@@ -133,10 +135,13 @@ def process_dataset(data, tokenizer, workers=None):
             for a in ans_tokens_list:
                 if a[0] >= tup[0] and a[1] < tup[1]:
                     gold_sentence_ids.append(idx)
+                elif a[0] >= tup[0] and a[0] < tup[1] and a[1] >= tup[1]:
+                    gold_sentence_ids.append(idx)
+                    gold_sentence_ids.append(idx+1)
             sentence = document[tup[0]:tup[1]]
             sentences.append(sentence)
         gold_sentence_ids_set = list(set(gold_sentence_ids))
-        if len(gold_sentence_ids_set) == 0:
+        if len(ans_tokens_list) == 0:
             print("No golden sentence available")
         ## gold_sentence_id
         yield {

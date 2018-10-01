@@ -38,6 +38,8 @@ def load_data(args, filename, skip_no_answer=False):
                 ex['question'] = [w.lower() for w in ex['question']]
             if args.uncased_doc:
                 ex['document'] = [w.lower() for w in ex['document']]
+            if args.uncased_doc:
+                ex['sentences'] = [[w.lower() for w in sent] for sent in ex['sentences']]
 
     # Skip unparsed (start/end) examples
     if skip_no_answer:

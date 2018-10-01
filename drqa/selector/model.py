@@ -15,7 +15,7 @@ import copy
 
 from torch.autograd import Variable
 from .config import override_model_args
-from .rnn_reader import RnnDocReader
+from .rnn_selector import RnnSentSelector
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class SentenceSelector(object):
         # Building network. If normalize if false, scores are not normalized
         # 0-1 per paragraph (no softmax).
         if args.model_type == 'rnn':
-            self.network = RnnDocReader(args, normalize)
+            self.network = RnnSentSelector(args, normalize)
         else:
             raise RuntimeError('Unsupported model: %s' % args.model_type)
 
@@ -192,6 +192,19 @@ class SentenceSelector(object):
     # Learning
     # --------------------------------------------------------------------------
 
+    def masked_softmax(self, input, target, mask):
+        maxes = torch.max(input + torch.log(mask), 1, keepdim=True)[0]
+        masked_exp_xs = torch.exp(input - maxes) * mask
+        masked_exp_xs[masked_exp_xs != masked_exp_xs] = 0
+        normalization_factor = masked_exp_xs.sum(1, keepdim=True)
+        # probs = masked_exp_xs / normalization_factor
+        score_log_probs = (input - maxes - torch.log(normalization_factor)) * mask
+        score_log_probs[score_log_probs != score_log_probs] = 0
+        negative_log_prob = -(score_log_probs * mask)
+        loss = torch.gather(negative_log_prob, 1, target.view(-1,1)).sum()/input.shape[0]
+        ## only collect the target loss value
+        return loss
+
     def update(self, ex):
         """Forward a batch of examples; step the optimizer to update weights."""
         if not self.optimizer:
@@ -203,19 +216,25 @@ class SentenceSelector(object):
         # Transfer to GPU
         if self.use_cuda:
             inputs = [e if e is None else Variable(e.cuda(async=True))
-                      for e in ex[:5]]
-            target_s = Variable(ex[5].cuda(async=True))
-            target_e = Variable(ex[6].cuda(async=True))
+                      for e in ex[:6]]
+            # target_s = Variable(ex[5].cuda(async=True))
+            # target_e = Variable(ex[6].cuda(async=True))
+            target_g = Variable(ex[6].cuda(async=True))
         else:
-            inputs = [e if e is None else Variable(e) for e in ex[:5]]
-            target_s = Variable(ex[5])
-            target_e = Variable(ex[6])
+            inputs = [e if e is None else Variable(e) for e in ex[:6]]
+            # target_s = Variable(ex[5])
+            # target_e = Variable(ex[6])
+            target_g = Variable(ex[6])
 
         # Run forward
-        score_s, score_e = self.network(*inputs)
+        # score_s, score_e = self.network(*inputs)
+        score_g = self.network(*inputs)
 
         # Compute loss and accuracies
-        loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
+        # loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
+        # mask the cross entropy
+        # loss = F.cross_entropy(score_g, target_g)
+        loss = self.masked_softmax(score_g, target_g, ex[3])
 
         # Clear gradients and run backward
         self.optimizer.zero_grad()
@@ -232,6 +251,7 @@ class SentenceSelector(object):
         # Reset any partially fixed parameters (e.g. rare words)
         self.reset_parameters()
 
+        # Return loss and batch_size
         return loss.data[0], ex[0].size(0)
 
     def reset_parameters(self):
@@ -279,32 +299,39 @@ class SentenceSelector(object):
         if self.use_cuda:
             inputs = [e if e is None else
                       Variable(e.cuda(async=True), volatile=True)
-                      for e in ex[:5]]
+                      for e in ex[:6]]
         else:
             inputs = [e if e is None else Variable(e, volatile=True)
-                      for e in ex[:5]]
+                      for e in ex[:6]]
 
         # Run forward
-        score_s, score_e = self.network(*inputs)
+        # score_s, score_e = self.network(*inputs)
+        score_g = self.network(*inputs)
 
         # Decode predictions
-        score_s = score_s.data.cpu()
-        score_e = score_e.data.cpu()
+        # score_s = score_s.data.cpu()
+        # score_e = score_e.data.cpu()
+        score_g = score_g.data.cpu()
+
+        ## multiply by ex[3] so that the masked input sentences are not picked
+        mask = ex[3].long()
+        score_g[mask == 0] = -float("Inf")
+
         if candidates:
-            args = (score_s, score_e, candidates, top_n, self.args.max_len)
+            args = (score_g, candidates, top_n, self.args.max_len)
             if async_pool:
                 return async_pool.apply_async(self.decode_candidates, args)
             else:
                 return self.decode_candidates(*args)
         else:
-            args = (score_s, score_e, top_n, self.args.max_len)
+            args = (score_g, top_n, self.args.max_len)
             if async_pool:
                 return async_pool.apply_async(self.decode, args)
             else:
                 return self.decode(*args)
 
     @staticmethod
-    def decode(score_s, score_e, top_n=1, max_len=None):
+    def decode(score_g, top_n=1, max_len=None):
         """Take argmax of constrained score_s * score_e.
 
         Args:
@@ -313,19 +340,22 @@ class SentenceSelector(object):
             top_n: number of top scored pairs to take
             max_len: max span length to consider
         """
-        pred_s = []
-        pred_e = []
-        pred_score = []
-        max_len = max_len or score_s.size(1)
-        for i in range(score_s.size(0)):
+        # pred_s = []
+        # pred_e = []
+        # pred_score = []
+        pred = []
+        # max_len = max_len or score_s.size(1)
+
+
+        for i in range(score_g.size(0)):
             # Outer product of scores to get full p_s * p_e matrix
-            scores = torch.ger(score_s[i], score_e[i])
+            # scores = torch.ger(score_s[i], score_e[i])
 
             # Zero out negative length and over-length span scores
-            scores.triu_().tril_(max_len - 1)
+            # scores.triu_().tril_(max_len - 1)
 
             # Take argmax or top n
-            scores = scores.numpy()
+            scores = score_g[i].numpy()
             scores_flat = scores.flatten()
             if top_n == 1:
                 idx_sort = [np.argmax(scores_flat)]
@@ -334,11 +364,11 @@ class SentenceSelector(object):
             else:
                 idx = np.argpartition(-scores_flat, top_n)[0:top_n]
                 idx_sort = idx[np.argsort(-scores_flat[idx])]
-            s_idx, e_idx = np.unravel_index(idx_sort, scores.shape)
-            pred_s.append(s_idx)
-            pred_e.append(e_idx)
-            pred_score.append(scores_flat[idx_sort])
-        return pred_s, pred_e, pred_score
+            pred_idx = np.unravel_index(idx_sort, scores.shape)
+            pred.append(pred_idx)
+            # pred_e.append(e_idx)
+            # pred_score.append(scores_flat[idx_sort])
+        return pred
 
     @staticmethod
     def decode_candidates(score_s, score_e, candidates, top_n=1, max_len=None):
@@ -442,7 +472,7 @@ class SentenceSelector(object):
         args = saved_params['args']
         if new_args:
             args = override_model_args(args, new_args)
-        return DocReader(args, word_dict, feature_dict, state_dict, normalize)
+        return SentenceSelector(args, word_dict, feature_dict, state_dict, normalize)
 
     @staticmethod
     def load_checkpoint(filename, normalize=True):
@@ -456,7 +486,7 @@ class SentenceSelector(object):
         epoch = saved_params['epoch']
         optimizer = saved_params['optimizer']
         args = saved_params['args']
-        model = DocReader(args, word_dict, feature_dict, state_dict, normalize)
+        model = SentenceSelector(args, word_dict, feature_dict, state_dict, normalize)
         model.init_optimizer(optimizer)
         return model, epoch
 

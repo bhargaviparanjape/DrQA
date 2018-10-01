@@ -256,6 +256,15 @@ class BilinearSeqAttn(nn.Module):
         return alpha
 
 
+class BilinearSeq(nn.Module):
+    def __init__(self, x1_size, x2_size, y_size):
+        super(BilinearSeq, self).__init__()
+        self.bilinear = nn.Bilinear(x1_size, x2_size, y_size)
+
+    def forward(self, input1, input2):
+        return self.bilinear(input1, input2)
+
+
 class LinearSeqAttn(nn.Module):
     """Self attention over a sequence:
 

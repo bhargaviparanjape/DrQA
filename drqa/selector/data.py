@@ -85,7 +85,7 @@ class Dictionary(object):
 # ------------------------------------------------------------------------------
 
 
-class ReaderDataset(Dataset):
+class SentenceSelectorDataset(Dataset):
 
     def __init__(self, examples, model, single_answer=False):
         self.model = model
@@ -99,7 +99,7 @@ class ReaderDataset(Dataset):
         return vectorize(self.examples[index], self.model, self.single_answer)
 
     def lengths(self):
-        return [(len(ex['document']), len(ex['question']))
+        return [(len(ex['sentences']), len(ex['question']))
                 for ex in self.examples]
 
 

@@ -49,7 +49,7 @@ def add_train_args(parser):
                          help='Train on CPU, even if GPUs are available.')
     runtime.add_argument('--gpu', type=int, default=-1,
                          help='Run on a specific GPU')
-    runtime.add_argument('--data-workers', type=int, default=5,
+    runtime.add_argument('--data-workers', type=int, default=0,
                          help='Number of subprocesses for data loading')
     runtime.add_argument('--parallel', type='bool', default=False,
                          help='Use DataParallel on all available GPUs')
@@ -60,8 +60,9 @@ def add_train_args(parser):
                          help='Train data iterations')
     runtime.add_argument('--batch-size', type=int, default=32,
                          help='Batch size for training')
-    runtime.add_argument('--test-batch-size', type=int, default=128,
+    runtime.add_argument('--test-batch-size', type=int, default=32,
                          help='Batch size during validation/testing')
+    runtime.add_argument('--global_mode', type=str, default="train", help="global mode: {train, test}")
 
     # Files
     files = parser.add_argument_group('Filesystem')
@@ -106,9 +107,9 @@ def add_train_args(parser):
 
     # General
     general = parser.add_argument_group('General')
-    general.add_argument('--official-eval', type='bool', default=True,
+    general.add_argument('--official-eval', type='bool', default=False,
                          help='Validate with official SQuAD eval')
-    general.add_argument('--valid-metric', type=str, default='f1',
+    general.add_argument('--valid-metric', type=str, default='accuracy',
                          help='The evaluation metric used for model selection')
     general.add_argument('--display-iter', type=int, default=25,
                          help='Log state after every <display_iter> epochs')
@@ -241,35 +242,35 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
     Unofficial = doesn't use SQuAD script.
     """
     eval_time = utils.Timer()
-    start_acc = utils.AverageMeter()
-    end_acc = utils.AverageMeter()
-    exact_match = utils.AverageMeter()
+    acc = utils.AverageMeter()
+    # end_acc = utils.AverageMeter()
+    # exact_match = utils.AverageMeter()
 
     # Make predictions
     examples = 0
     for ex in data_loader:
         batch_size = ex[0].size(0)
-        pred_s, pred_e, _ = model.predict(ex)
-        target_s, target_e = ex[-3:-1]
+        pred = model.predict(ex)
+        target = ex[-2:-1]
 
         # We get metrics for independent start/end and joint start/end
-        accuracies = eval_accuracies(pred_s, target_s, pred_e, target_e)
-        start_acc.update(accuracies[0], batch_size)
-        end_acc.update(accuracies[1], batch_size)
-        exact_match.update(accuracies[2], batch_size)
+        accuracy = eval_accuracies(pred, target)
+        acc.update(accuracy, batch_size)
+        # end_acc.update(accuracies[1], batch_size)
+        # exact_match.update(accuracies[2], batch_size)
 
         # If getting train accuracies, sample max 10k
         examples += batch_size
         if mode == 'train' and examples >= 1e4:
             break
 
-    logger.info('%s valid unofficial: Epoch = %d | start = %.2f | ' %
-                (mode, global_stats['epoch'], start_acc.avg) +
-                'end = %.2f | exact = %.2f | examples = %d | ' %
-                (end_acc.avg, exact_match.avg, examples) +
+    logger.info('%s valid unofficial: Epoch = %d | accuracy = %.2f | ' %
+                (mode, global_stats['epoch'], acc.avg) +
+                'examples = %d | ' %
+                (examples) +
                 'valid time = %.2f (s)' % eval_time.time())
 
-    return {'exact_match': exact_match.avg}
+    return {'accuracy': acc.avg}
 
 
 def validate_official(args, data_loader, model, global_stats,
@@ -314,40 +315,40 @@ def validate_official(args, data_loader, model, global_stats,
     return {'exact_match': exact_match.avg * 100, 'f1': f1.avg * 100}
 
 
-def eval_accuracies(pred_s, target_s, pred_e, target_e):
+def eval_accuracies(pred, target):
     """An unofficial evalutation helper.
     Compute exact start/end/complete match accuracies for a batch.
     """
     # Convert 1D tensors to lists of lists (compatibility)
-    if torch.is_tensor(target_s):
-        target_s = [[e] for e in target_s]
-        target_e = [[e] for e in target_e]
+    if torch.is_tensor(target):
+        target = [[e] for e in target]
+        # target_e = [[e] for e in target_e]
 
     # Compute accuracies from targets
-    batch_size = len(pred_s)
-    start = utils.AverageMeter()
-    end = utils.AverageMeter()
-    em = utils.AverageMeter()
+    batch_size = len(pred)
+    accuracy = utils.AverageMeter()
+    # end = utils.AverageMeter()
+    # em = utils.AverageMeter()
     for i in range(batch_size):
         # Start matches
-        if pred_s[i] in target_s[i]:
-            start.update(1)
+        if pred[i] in target[0][i]:
+            accuracy.update(1)
         else:
-            start.update(0)
+            accuracy.update(0)
 
         # End matches
-        if pred_e[i] in target_e[i]:
-            end.update(1)
-        else:
-            end.update(0)
-
-        # Both start and end match
-        if any([1 for _s, _e in zip(target_s[i], target_e[i])
-                if _s == pred_s[i] and _e == pred_e[i]]):
-            em.update(1)
-        else:
-            em.update(0)
-    return start.avg * 100, end.avg * 100, em.avg * 100
+        # if pred_e[i] in target_e[i]:
+        #     end.update(1)
+        # else:
+        #     end.update(0)
+		#
+        # # Both start and end match
+        # if any([1 for _s, _e in zip(target_s[i], target_e[i])
+        #         if _s == pred_s[i] and _e == pred_e[i]]):
+        #     em.update(1)
+        # else:
+        #     em.update(0)
+    return accuracy.avg * 100
 
 
 # ------------------------------------------------------------------------------
@@ -432,7 +433,7 @@ def main(args):
     # Two datasets: train and dev. If we sort by length it's faster.
     logger.info('-' * 100)
     logger.info('Make data loaders')
-    train_dataset = data.ReaderDataset(train_exs, model, single_answer=True)
+    train_dataset = data.SentenceSelectorDataset(train_exs, model, single_answer=True)
     if args.sort_by_len:
         train_sampler = data.SortedBatchSampler(train_dataset.lengths(),
                                                 args.batch_size,
@@ -447,7 +448,7 @@ def main(args):
         collate_fn=vector.batchify,
         pin_memory=args.cuda,
     )
-    dev_dataset = data.ReaderDataset(dev_exs, model, single_answer=False)
+    dev_dataset = data.SentenceSelectorDataset(dev_exs, model, single_answer=False)
     if args.sort_by_len:
         dev_sampler = data.SortedBatchSampler(dev_dataset.lengths(),
                                               args.test_batch_size,
@@ -474,6 +475,13 @@ def main(args):
     logger.info('-' * 100)
     logger.info('Starting training...')
     stats = {'timer': utils.Timer(), 'epoch': 0, 'best_valid': 0}
+
+    ## allow toggle mode that will let you evaluate on whatever dev set you give it; preload model
+    if args.global_mode == "test":
+        result = validate_unofficial(args, dev_loader, model, stats, mode='dev')
+        print(result[args.valid_metric])
+        exit(0)
+
     for epoch in range(start_epoch, args.num_epochs):
         stats['epoch'] = epoch
 
@@ -481,7 +489,7 @@ def main(args):
         train(args, train_loader, model, stats)
 
         # Validate unofficial (train)
-        validate_unofficial(args, train_loader, model, stats, mode='train')
+        # validate_unofficial(args, train_loader, model, stats, mode='train')
 
         # Validate unofficial (dev)
         result = validate_unofficial(args, dev_loader, model, stats, mode='dev')
@@ -498,7 +506,8 @@ def main(args):
                          stats['epoch'], model.updates))
             model.save(args.model_file)
             stats['best_valid'] = result[args.valid_metric]
-
+        if epoch % 5 == 0:
+            model.save(args.model_file + ".dummy")
 
 if __name__ == '__main__':
     # Parse cmdline args and setup environment
