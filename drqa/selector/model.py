@@ -12,7 +12,7 @@ import torch.nn.functional as F
 import numpy as np
 import logging
 import copy
-
+from tensorboardX import SummaryWriter
 from torch.autograd import Variable
 from .config import override_model_args
 from .rnn_selector import RnnSentSelector
@@ -197,11 +197,11 @@ class SentenceSelector(object):
     def masked_softmax(self, input, target, mask):
         maxes = torch.max(input + torch.log(mask), 1, keepdim=True)[0]
         masked_exp_xs = torch.exp(input - maxes) * mask
-        masked_exp_xs[masked_exp_xs != masked_exp_xs] = 0
+        # masked_exp_xs[masked_exp_xs != masked_exp_xs] = 0
         normalization_factor = masked_exp_xs.sum(1, keepdim=True)
         # probs = masked_exp_xs / normalization_factor
         score_log_probs = (input - maxes - torch.log(normalization_factor)) * mask
-        score_log_probs[score_log_probs != score_log_probs] = 0
+        # score_log_probs[score_log_probs != score_log_probs] = 0
         negative_log_prob = -(score_log_probs * mask)
         loss = torch.gather(negative_log_prob, 1, target.view(-1,1)).sum()/input.shape[0]
         ## only collect the target loss value
@@ -243,7 +243,7 @@ class SentenceSelector(object):
         loss.backward()
 
         # Clip gradients
-        torch.nn.utils.clip_grad_norm(self.network.parameters(),
+        torch.nn.utils.clip_grad_norm_(self.network.parameters(),
                                       self.args.grad_clipping)
 
         # Update parameters

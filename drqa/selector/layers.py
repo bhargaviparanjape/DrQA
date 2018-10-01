@@ -308,7 +308,7 @@ def uniform_weights(x, x_mask):
     if x.data.is_cuda:
         alpha = alpha.cuda()
     alpha = alpha * x_mask.eq(0).float()
-    alpha = alpha / alpha.sum(1).expand(alpha.size())
+    alpha = alpha / alpha.sum(1).unsqueeze(-1).expand(alpha.size())
     return alpha
 
 

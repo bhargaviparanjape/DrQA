@@ -90,7 +90,16 @@ class RnnSentSelector(nn.Module):
         #     question_hidden_size,
         #     normalize=normalize,
         # )
-        self.relevance_scorer = nn.Linear(doc_hidden_size, 1)
+        self.relevance_scorer = nn.Sequential(
+            nn.Linear(doc_hidden_size, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1))
+
+        self.relevance_scorer1 = layers.BilinearSeq(
+            doc_hidden_size,
+            question_hidden_size,
+            1,
+        )
 
 
 
@@ -154,20 +163,21 @@ class RnnSentSelector(nn.Module):
             q_merge_weights = self.self_attn(question_hiddens, x2_mask_flattened)
         question_hidden = layers.weighted_avg(question_hiddens, q_merge_weights)
 
-        # Predict start and end positions
+        d_merge_weights = layers.uniform_weights(doc_hiddens, x1_mask_flattened)
+        docs_hidden = layers.weighted_avg(doc_hiddens, d_merge_weights)
+        relevance_scores = self.relevance_scorer1(docs_hidden, question_hidden).view(batch_size, max_sent, -1).squeeze(
+            2)
+
+        ### Fancy interaction between question and hidden layer ###
+        '''
         # Repeat question_hidden for sequence length of document
         question_hidden_expaned = question_hidden.unsqueeze(1).expand(question_hidden.shape[0], doc_hiddens.shape[1], question_hidden.shape[1]).contiguous()
         scores = self.sentence_scorer(doc_hiddens, question_hidden_expaned)
-
         # Max of the scores (needs to be masked)
         max_scores = \
         scores.data.masked_fill_(x1_mask_flattened.unsqueeze(-1).expand(scores.size()).data, -float("inf")).max(1)[0]
-
         # Weight vector to predict 2 values
         relevance_scores = self.relevance_scorer(max_scores).view(batch_size, max_sent, -1).squeeze(2)
-
-
-        # Normalize across the score values for a paragraph
-        ## already exponents so just divide by sum
+        '''
 
         return relevance_scores
