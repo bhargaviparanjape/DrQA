@@ -86,7 +86,8 @@ def process_dataset(data, tokenizer, workers=None):
     tokenizer_class = tokenizers.get_class(tokenizer)
     make_pool = partial(Pool, workers, initializer=init)
 
-    workers = make_pool(initargs=(tokenizer_class, {'annotators': {'lemma'}, 'classpath' : "/home/bhargavi/robust_nlp/invariance/DrQA/data/corenlp/*"}))
+    #workers = make_pool(initargs=(tokenizer_class, {'annotators': {'lemma'}, 'classpath' : "/home/bhargavi/robust_nlp/invariance/DrQA/data/corenlp/*"}))
+    workers = make_pool(initargs=(tokenizer_class, {'annotators': {'lemma'}}))
     q_tokens = workers.map(tokenize, data['questions'])
     workers.close()
     workers.join()
