@@ -184,6 +184,8 @@ class SentenceSelector(object):
         elif self.args.optimizer == 'adamax':
             self.optimizer = optim.Adamax(parameters,
                                           weight_decay=self.args.weight_decay)
+        elif self.args.optimizer == "adam":
+            self.optimizer = optim.Adam(parameters, lr=self.args.learning_rate)
         else:
             raise RuntimeError('Unsupported optimizer: %s' %
                                self.args.optimizer)
@@ -234,7 +236,7 @@ class SentenceSelector(object):
         # loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
         # mask the cross entropy
         # loss = F.cross_entropy(score_g, target_g)
-        loss = self.masked_softmax(score_g, target_g, ex[3])
+        loss = self.masked_softmax(score_g, target_g, inputs[3])
 
         # Clear gradients and run backward
         self.optimizer.zero_grad()
@@ -314,8 +316,9 @@ class SentenceSelector(object):
         score_g = score_g.data.cpu()
 
         ## multiply by ex[3] so that the masked input sentences are not picked
-        mask = ex[3].long()
-        score_g[mask == 0] = -float("Inf")
+        mask = ex[3].byte()
+        # score_g[mask == 0] = -float("Inf")
+        score_g.data.masked_fill_((1 - mask).data, -float("inf"))
 
         if candidates:
             args = (score_g, candidates, top_n, self.args.max_len)

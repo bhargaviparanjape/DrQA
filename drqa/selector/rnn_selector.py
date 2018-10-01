@@ -128,12 +128,11 @@ class RnnSentSelector(nn.Module):
         x1_mask_flattened = x1_mask.view(x1_mask.shape[0] * max_sent, -1)
         x2_mask_flattened = x2_mask_expanded.view(x2_mask_expanded.shape[0] * max_sent, -1)
 
-
         # Form document encoding inputs
         drnn_input = [x1_emb_flattened]
 
         # Add attention-weighted question representation
-        # same question across all sentences of a document
+        # Same question across all sentences of a document
         if self.args.use_qemb:
             x2_weighted_emb = self.qemb_match(x1_emb_flattened, x2_emb_flattened, x2_mask_flattened)
             drnn_input.append(x2_weighted_emb)
@@ -159,11 +158,13 @@ class RnnSentSelector(nn.Module):
         question_hidden_expaned = question_hidden.unsqueeze(1).expand(question_hidden.shape[0], doc_hiddens.shape[1], question_hidden.shape[1]).contiguous()
         scores = self.sentence_scorer(doc_hiddens, question_hidden_expaned)
 
-        # Max of the scores
-        max_scores = scores.max(1)[0]
+        # Max of the scores (needs to be masked)
+        max_scores = \
+        scores.data.masked_fill_(x1_mask_flattened.unsqueeze(-1).expand(scores.size()).data, -float("inf")).max(1)[0]
 
         # Weight vector to predict 2 values
         relevance_scores = self.relevance_scorer(max_scores).view(batch_size, max_sent, -1).squeeze(2)
+
 
         # Normalize across the score values for a paragraph
         ## already exponents so just divide by sum

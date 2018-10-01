@@ -134,7 +134,7 @@ def batchify(batch):
 
     # Maybe return without targets
     if len(batch[0]) == NUM_INPUTS + NUM_EXTRA:
-        return x1, x1_f, x1_mask, x2, x2_mask, ids
+        return x1, x1_f, x1_mask, x1_sent_mask, x2, x2_mask, ids
 
     elif len(batch[0]) == NUM_INPUTS + NUM_EXTRA + NUM_TARGETS:
         # ...Otherwise add targets
