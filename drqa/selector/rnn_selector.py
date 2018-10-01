@@ -16,11 +16,11 @@ from . import layers
 # ------------------------------------------------------------------------------
 
 
-class RnnDocReader(nn.Module):
+class RnnSentSelector(nn.Module):
     RNN_TYPES = {'lstm': nn.LSTM, 'gru': nn.GRU, 'rnn': nn.RNN}
 
     def __init__(self, args, normalize=True):
-        super(RnnDocReader, self).__init__()
+        super(RnnSentSelector, self).__init__()
         # Store config
         self.args = args
 
@@ -78,18 +78,22 @@ class RnnDocReader(nn.Module):
 
         # Bilinear attention for span start/end
         ## simple mlp to score these sentences
-        self.start_attn = layers.BilinearSeqAttn(
+        self.sentence_scorer = layers.BilinearSeq(
             doc_hidden_size,
             question_hidden_size,
-            normalize=normalize,
-        )
-        self.end_attn = layers.BilinearSeqAttn(
             doc_hidden_size,
-            question_hidden_size,
-            normalize=normalize,
         )
 
-    def forward(self, x1, x1_f, x1_mask, x2, x2_mask):
+        # self.end_attn = layers.BilinearSeqAttn(
+        #     doc_hidden_size,
+        #     question_hidden_size,
+        #     normalize=normalize,
+        # )
+        self.relevance_scorer = nn.Linear(doc_hidden_size, 1)
+
+
+
+    def forward(self, x1, x1_f, x1_mask, x1_sent_mask, x2, x2_mask):
         """Inputs:
         x1 = document word indices             [batch * len_d]
         x1_f = document word features indices  [batch * len_d * nfeat]
@@ -101,6 +105,10 @@ class RnnDocReader(nn.Module):
         x1_emb = self.embedding(x1)
         x2_emb = self.embedding(x2)
 
+        # Maximum sentences in batch
+        max_sent = x1_emb.shape[1]
+        batch_size = x1_emb.shape[0]
+
         # Dropout on embeddings
         if self.args.dropout_emb > 0:
             x1_emb = nn.functional.dropout(x1_emb, p=self.args.dropout_emb,
@@ -108,12 +116,26 @@ class RnnDocReader(nn.Module):
             x2_emb = nn.functional.dropout(x2_emb, p=self.args.dropout_emb,
                                            training=self.training)
 
+        # Expand Question embeddings to max no. of sentences
+        x2_emb_expanded = x2_emb.unsqueeze(1).expand(x2_emb.shape[0], max_sent, x2_emb.shape[1],x2_emb.shape[2]).contiguous()
+        x2_mask_expanded = x2_mask.unsqueeze(1).expand(x2_mask.shape[0], max_sent, x2_mask.shape[1]).contiguous()
+
+        # Change views of document vectors and question vectors, add to batch dimension
+        x1_emb_flattened = x1_emb.view(x1_emb.shape[0] * max_sent, -1, x1_emb.shape[3])
+        x2_emb_flattened = x2_emb_expanded.view(x2_emb_expanded.shape[0] * max_sent, -1, x2_emb_expanded.shape[3])
+
+        # Change views of mask variables
+        x1_mask_flattened = x1_mask.view(x1_mask.shape[0] * max_sent, -1)
+        x2_mask_flattened = x2_mask_expanded.view(x2_mask_expanded.shape[0] * max_sent, -1)
+
+
         # Form document encoding inputs
-        drnn_input = [x1_emb]
+        drnn_input = [x1_emb_flattened]
 
         # Add attention-weighted question representation
+        # same question across all sentences of a document
         if self.args.use_qemb:
-            x2_weighted_emb = self.qemb_match(x1_emb, x2_emb, x2_mask)
+            x2_weighted_emb = self.qemb_match(x1_emb_flattened, x2_emb_flattened, x2_mask_flattened)
             drnn_input.append(x2_weighted_emb)
 
         # Add manual features
@@ -121,17 +143,29 @@ class RnnDocReader(nn.Module):
             drnn_input.append(x1_f)
 
         # Encode document with RNN
-        doc_hiddens = self.doc_rnn(torch.cat(drnn_input, 2), x1_mask)
+        doc_hiddens = self.doc_rnn(torch.cat(drnn_input, 2), x1_mask_flattened)
 
         # Encode question with RNN + merge hiddens
-        question_hiddens = self.question_rnn(x2_emb, x2_mask)
+        question_hiddens = self.question_rnn(x2_emb_flattened, x2_mask_flattened)
+
         if self.args.question_merge == 'avg':
-            q_merge_weights = layers.uniform_weights(question_hiddens, x2_mask)
+            q_merge_weights = layers.uniform_weights(question_hiddens, x2_mask_flattened)
         elif self.args.question_merge == 'self_attn':
-            q_merge_weights = self.self_attn(question_hiddens, x2_mask)
+            q_merge_weights = self.self_attn(question_hiddens, x2_mask_flattened)
         question_hidden = layers.weighted_avg(question_hiddens, q_merge_weights)
 
         # Predict start and end positions
-        start_scores = self.start_attn(doc_hiddens, question_hidden, x1_mask)
-        end_scores = self.end_attn(doc_hiddens, question_hidden, x1_mask)
-        return start_scores, end_scores
+        # Repeat question_hidden for sequence length of document
+        question_hidden_expaned = question_hidden.unsqueeze(1).expand(question_hidden.shape[0], doc_hiddens.shape[1], question_hidden.shape[1]).contiguous()
+        scores = self.sentence_scorer(doc_hiddens, question_hidden_expaned)
+
+        # Max of the scores
+        max_scores = scores.max(1)[0]
+
+        # Weight vector to predict 2 values
+        relevance_scores = self.relevance_scorer(max_scores).view(batch_size, max_sent, -1).squeeze(2)
+
+        # Normalize across the score values for a paragraph
+        ## already exponents so just divide by sum
+
+        return relevance_scores

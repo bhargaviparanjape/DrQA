@@ -12,7 +12,7 @@ from multiprocessing import Pool as ProcessPool
 from multiprocessing.util import Finalize
 
 from .vector import vectorize, batchify
-from .model import DocReader
+from .model import SentenceSelector
 from . import DEFAULTS, utils
 from .. import tokenizers
 
@@ -57,7 +57,7 @@ class Predictor(object):
             num_workers: number of CPU processes to use to preprocess batches.
         """
         logger.info('Initializing model...')
-        self.model = DocReader.load(model or DEFAULTS['model'],
+        self.model = SentenceSelector.load(model or DEFAULTS['model'],
                                     normalize=normalize)
 
         if embedding_file:
