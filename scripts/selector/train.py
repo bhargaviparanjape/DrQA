@@ -16,13 +16,13 @@ import subprocess
 import logging
 from os.path import dirname,realpath
 sys.path.append(dirname(dirname(dirname(realpath(__file__)))))
-
+from tensorboardX import SummaryWriter
 from drqa.selector import utils, vector, config, data
 from drqa.selector import SentenceSelector
 from drqa import DATA_DIR as DRQA_DATA
 
 logger = logging.getLogger()
-
+writer = SummaryWriter()
 
 # ------------------------------------------------------------------------------
 # Training arguments.
@@ -216,7 +216,12 @@ def train(args, data_loader, model, global_stats):
     for idx, ex in enumerate(data_loader):
         train_loss.update(*model.update(ex))
 
+        writer.add_scalar("loss", train_loss.avg, idx)
+        for name, param in model.network.named_parameters():
+            writer.add_histogram(name, param.clone().cpu().data.numpy(), idx)
+
         if idx % args.display_iter == 0:
+
             logger.info('train: Epoch = %d | iter = %d/%d | ' %
                         (global_stats['epoch'], idx, len(data_loader)) +
                         'loss = %.2f | elapsed time = %.2f (s)' %
@@ -509,6 +514,9 @@ def main(args):
             stats['best_valid'] = result[args.valid_metric]
         if epoch % 5 == 0:
             model.save(args.model_file + ".dummy")
+
+    writer.export_scalars_to_json("./all_scalars.json")
+    writer.close()
 
 if __name__ == '__main__':
     # Parse cmdline args and setup environment
