@@ -233,8 +233,8 @@ class SentenceSelector(object):
         # Compute loss and accuracies
         # loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
         # mask the cross entropy
-        # loss = F.cross_entropy(score_g, target_g)
-        loss = self.masked_softmax(score_g, target_g, ex[3])
+        loss = F.cross_entropy(score_g, target_g)
+        # loss = self.masked_softmax(score_g, target_g, inputs[3])
 
         # Clear gradients and run backward
         self.optimizer.zero_grad()

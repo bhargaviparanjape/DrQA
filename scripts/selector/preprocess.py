@@ -95,7 +95,8 @@ def process_dataset(data, tokenizer, workers=None):
     workers.join()
 
     workers = make_pool(
-        initargs=(tokenizer_class, {'annotators': {'lemma', 'pos', 'ner'},'classpath' : "/home/bhargavi/robust_nlp/invariance/DrQA/data/corenlp/*"})
+	#initargs=(tokenizer_class, {'annotators': {'lemma', 'pos', 'ner'},'classpath' : "/home/bhargavi/robust_nlp/invariance/DrQA/data/corenlp/*"})
+        initargs=(tokenizer_class, {'annotators': {'lemma', 'pos', 'ner'}})
     )
     c_tokens = workers.map(tokenize, data['contexts'])
     workers.close()

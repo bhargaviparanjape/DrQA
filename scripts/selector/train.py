@@ -14,7 +14,8 @@ import os
 import sys
 import subprocess
 import logging
-
+from os.path import dirname,realpath
+sys.path.append(dirname(dirname(dirname(realpath(__file__)))))
 
 from drqa.selector import utils, vector, config, data
 from drqa.selector import SentenceSelector
