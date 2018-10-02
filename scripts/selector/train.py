@@ -259,6 +259,12 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
         pred = model.predict(ex)
         target = ex[-2:-1]
 
+
+        if args.global_mode == "test":
+            preds = np.array([p[0] for p in pred])
+            sent_lengths = (ex[3].sum(1) - 1).long().data.numpy()
+            attacked = (preds == sent_lengths).sum()
+
         # We get metrics for independent start/end and joint start/end
         accuracy = eval_accuracies(pred, target, mode)
         acc.update(accuracy, batch_size)
@@ -276,6 +282,9 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
                 (examples) +
                 'valid time = %.2f (s)' % eval_time.time())
 
+    if args.global_mode == "test":
+        print(attacked)
+        print(examples)
     return {'accuracy': acc.avg}
 
 
