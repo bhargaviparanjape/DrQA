@@ -163,10 +163,12 @@ class RnnSentSelector(nn.Module):
             q_merge_weights = self.self_attn(question_hiddens, x2_mask_flattened)
         question_hidden = layers.weighted_avg(question_hiddens, q_merge_weights)
 
+
+        ### Simple document encoding ###
         d_merge_weights = layers.uniform_weights(doc_hiddens, x1_mask_flattened)
         docs_hidden = layers.weighted_avg(doc_hiddens, d_merge_weights)
-        relevance_scores = self.relevance_scorer1(docs_hidden, question_hidden).view(batch_size, max_sent, -1).squeeze(
-            2)
+        relevance_scores = self.relevance_scorer1(docs_hidden, question_hidden).view(batch_size, max_sent, -1).squeeze(2)
+
 
         ### Fancy interaction between question and hidden layer ###
         '''

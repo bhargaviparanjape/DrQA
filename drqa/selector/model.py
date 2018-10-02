@@ -202,12 +202,12 @@ class SentenceSelector(object):
         # probs = masked_exp_xs / normalization_factor
         score_log_probs = (input - maxes - torch.log(normalization_factor)) * mask
         # score_log_probs[score_log_probs != score_log_probs] = 0
-        negative_log_prob = -(score_log_probs * mask)
+        negative_log_prob = -(score_log_probs) * mask
         loss = torch.gather(negative_log_prob, 1, target.view(-1,1)).sum()/input.shape[0]
         ## only collect the target loss value
         return loss
 
-    def update(self, ex):
+    def update(self, ex, writer):
         """Forward a batch of examples; step the optimizer to update weights."""
         if not self.optimizer:
             raise RuntimeError('No optimizer set.')
@@ -231,6 +231,8 @@ class SentenceSelector(object):
         # Run forward
         # score_s, score_e = self.network(*inputs)
         score_g = self.network(*inputs)
+
+        # writer.add_graph(self.network, (*inputs,))
 
         # Compute loss and accuracies
         # loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
@@ -367,8 +369,8 @@ class SentenceSelector(object):
             else:
                 idx = np.argpartition(-scores_flat, top_n)[0:top_n]
                 idx_sort = idx[np.argsort(-scores_flat[idx])]
-            pred_idx = np.unravel_index(idx_sort, scores.shape)
-            pred.append(pred_idx)
+            # pred_idx = np.unravel_index(idx_sort, scores.shape)
+            pred.append(idx_sort)
             # pred_e.append(e_idx)
             # pred_score.append(scores_flat[idx_sort])
         return pred

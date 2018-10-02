@@ -214,7 +214,7 @@ def train(args, data_loader, model, global_stats):
 
     # Run one epoch
     for idx, ex in enumerate(data_loader):
-        train_loss.update(*model.update(ex))
+        train_loss.update(*model.update(ex, writer))
 
         writer.add_scalar("loss", train_loss.avg, idx)
         for name, param in model.network.named_parameters():
@@ -260,7 +260,7 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
         target = ex[-2:-1]
 
         # We get metrics for independent start/end and joint start/end
-        accuracy = eval_accuracies(pred, target)
+        accuracy = eval_accuracies(pred, target, mode)
         acc.update(accuracy, batch_size)
         # end_acc.update(accuracies[1], batch_size)
         # exact_match.update(accuracies[2], batch_size)
@@ -321,14 +321,22 @@ def validate_official(args, data_loader, model, global_stats,
     return {'exact_match': exact_match.avg * 100, 'f1': f1.avg * 100}
 
 
-def eval_accuracies(pred, target):
+def eval_accuracies(pred, target, mode="dev"):
     """An unofficial evalutation helper.
     Compute exact start/end/complete match accuracies for a batch.
     """
     # Convert 1D tensors to lists of lists (compatibility)
     if torch.is_tensor(target):
         target = [[e] for e in target]
+    elif torch.is_tensor(target[0]):
+        target = [[e.item()] for e in target[0]]
+    else:
+        target = target[0]
+
         # target_e = [[e] for e in target_e]
+
+    ## make changes according to mode
+
 
     # Compute accuracies from targets
     batch_size = len(pred)
@@ -337,7 +345,7 @@ def eval_accuracies(pred, target):
     # em = utils.AverageMeter()
     for i in range(batch_size):
         # Start matches
-        if pred[i] in target[0][i]:
+        if pred[i][0] in target[i]:
             accuracy.update(1)
         else:
             accuracy.update(0)
@@ -495,7 +503,7 @@ def main(args):
         train(args, train_loader, model, stats)
 
         # Validate unofficial (train)
-        # validate_unofficial(args, train_loader, model, stats, mode='train')
+        validate_unofficial(args, train_loader, model, stats, mode='train')
 
         # Validate unofficial (dev)
         result = validate_unofficial(args, dev_loader, model, stats, mode='dev')
