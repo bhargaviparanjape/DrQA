@@ -447,7 +447,7 @@ def main(args):
 	logger.info('Make data loaders')
 	train_dataset = data.ReaderDataset(train_exs, model, single_answer=True)
 	# Filter out None examples in training dataset (where sentence selection fails)
-	train_dataset = [t for t in train_dataset if t is not None]
+	train_dataset.examples = [t for t in train_dataset.examples if t is not None]
 	if args.sort_by_len:
 		train_sampler = data.SortedBatchSampler(train_dataset.lengths(),
 												args.batch_size,
@@ -463,7 +463,7 @@ def main(args):
 		pin_memory=args.cuda,
 	)
 	dev_dataset = data.ReaderDataset(dev_exs, model, single_answer=False)
-	dev_dataset = [t for t in dev_dataset if t is not None]
+	dev_dataset.examples = [t for t in dev_dataset.examples if t is not None]
 	if args.sort_by_len:
 		dev_sampler = data.SortedBatchSampler(dev_dataset.lengths(),
 											  args.test_batch_size,
