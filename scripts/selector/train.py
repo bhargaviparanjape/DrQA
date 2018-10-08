@@ -22,7 +22,7 @@ from drqa.selector import SentenceSelector
 from drqa import DATA_DIR as DRQA_DATA
 
 logger = logging.getLogger()
-writer = SummaryWriter()
+# writer = SummaryWriter()
 
 # ------------------------------------------------------------------------------
 # Training arguments.
@@ -85,7 +85,7 @@ def add_train_args(parser):
     files.add_argument('--embed-dir', type=str, default=EMBED_DIR,
                        help='Directory of pre-trained embedding files')
     files.add_argument('--embedding-file', type=str,
-                       default='glove.840B.300d.txt',
+                       default='glove.6B.300d.txt',
                        help='Space-separated pretrained embeddings file')
 
     # Saving + loading
@@ -214,11 +214,11 @@ def train(args, data_loader, model, global_stats):
 
     # Run one epoch
     for idx, ex in enumerate(data_loader):
-        train_loss.update(*model.update(ex, writer))
+        train_loss.update(*model.update(ex))
 
-        writer.add_scalar("loss", train_loss.avg, idx)
-        for name, param in model.network.named_parameters():
-            writer.add_histogram(name, param.clone().cpu().data.numpy(), idx)
+        # writer.add_scalar("loss", train_loss.avg, idx)
+        # for name, param in model.network.named_parameters():
+        #     writer.add_histogram(name, param.clone().cpu().data.numpy(), idx)
 
         if idx % args.display_iter == 0:
 
@@ -532,8 +532,8 @@ def main(args):
         if epoch % 5 == 0:
             model.save(args.model_file + ".dummy")
 
-    writer.export_scalars_to_json("./all_scalars.json")
-    writer.close()
+    # writer.export_scalars_to_json("./all_scalars.json")
+    # writer.close()
 
 if __name__ == '__main__':
     # Parse cmdline args and setup environment

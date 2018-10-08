@@ -132,4 +132,5 @@ class RnnDocReader(nn.Module):
         # Predict start and end positions
         start_scores = self.start_attn(doc_hiddens, question_hidden, x1_mask)
         end_scores = self.end_attn(doc_hiddens, question_hidden, x1_mask)
+        #
         return start_scores, end_scores
