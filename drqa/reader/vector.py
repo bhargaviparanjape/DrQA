@@ -37,11 +37,21 @@ def vectorize(ex, model, single_answer=False):
         sentence_lengths = [len(sent) for sent in ex['sentences']]
         max_length = max(sentence_lengths)
         sentences = torch.LongTensor([pad_single_seq([word_dict[w] for w in sent], max_length) for sent in ex['sentences']])
-        ex_batch = sent_selector_batchify([sent_selector_vectorize(ex, model,single_answer)])
-        top_sentence = model.sentence_selector.predict(ex_batch)[0][0]
+
+        if args.use_gold_sentence:
+            # Use gold sentence
+            if len(ex['gold_sentence_ids']) == 0:
+                return []
+            top_sentence = ex['gold_sentence_ids'][0]
+        else:
+            ex_batch = sent_selector_batchify([sent_selector_vectorize(ex, model,single_answer)])
+            top_sentence = model.sentence_selector.predict(ex_batch)[0][0]
         # Extract top sentence and change ex["document"] accordingly
-        # document = torch.LongTensor([word_dict[w] for w in ex['sentences'][top_sentence]])
-        # ex['document'] = ex['sentences'][top_sentence]
+        document = torch.LongTensor([word_dict[w] for w in ex['sentences'][top_sentence]])
+        ex['document'] = ex['sentences'][top_sentence]
+        offset_subset = ex["offsets"][sentence_boundaries[top_sentence][0]:sentence_boundaries[top_sentence][1]]
+        initial_offset = offset_subset[0][0]
+        ex['offsets'] = [[t[0] - initial_offset, t[1] - initial_offset] for t in offset_subset]
 
         # Check if selected sentence contains any answer span
         window = sentence_boundaries[top_sentence]
@@ -55,7 +65,7 @@ def vectorize(ex, model, single_answer=False):
         # Set random span in the selected sentence as answer to predict? No it needs to predict that the answer does not exist
         # Single Answer is False for development set
         if flag and single_answer == True:
-            return None
+            return []
         if flag and len(ex['answers'])> 0:
             ans_len = ex["answers"][0][1] + 1 - ex["answers"][0][0]
             random_start_index = np.random.randint(window[1] - window[0])
@@ -138,6 +148,8 @@ def batchify(batch):
     NUM_INPUTS = 3
     NUM_TARGETS = 2
     NUM_EXTRA = 1
+
+    batch = [ex for ex in batch if len(ex) != 0]
 
     ids = [ex[-1] for ex in batch]
     docs = [ex[0] for ex in batch]
