@@ -191,6 +191,8 @@ class DocReader(object):
         elif self.args.optimizer == 'adamax':
             self.optimizer = optim.Adamax(parameters,
                                           weight_decay=self.args.weight_decay)
+        elif self.args.optimizer == "adam":
+            self.optimizer = optim.Adam(parameters, lr=self.args.learning_rate)
         else:
             raise RuntimeError('Unsupported optimizer: %s' %
                                self.args.optimizer)
