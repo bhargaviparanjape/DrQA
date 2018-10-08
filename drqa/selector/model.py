@@ -46,7 +46,7 @@ class SentenceSelector(object):
         if args.model_type == 'rnn':
             self.network = RnnSentSelector(args, normalize)
         else:
-            raise RuntimeError('Unsupported model: %s' % args.model_type)
+            raise RuntimeError('Unsupported model: %s' % args.modeml_type)
 
         # Load saved state
         if state_dict:
@@ -207,7 +207,7 @@ class SentenceSelector(object):
         ## only collect the target loss value
         return loss
 
-    def update(self, ex, writer):
+    def update(self, ex):
         """Forward a batch of examples; step the optimizer to update weights."""
         if not self.optimizer:
             raise RuntimeError('No optimizer set.')

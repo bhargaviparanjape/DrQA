@@ -8,7 +8,13 @@
 
 from collections import Counter
 import torch
+from ..selector.vector import vectorize as sent_selector_vectorize
+from ..selector.vector import batchify_sentences as sent_selector_batchify
+import numpy as np
 
+def pad_single_seq(seq, max_len, pad_token = 0):
+    seq += [pad_token for i in range(max_len - len(seq))]
+    return seq
 
 def vectorize(ex, model, single_answer=False):
     """Torchify a single example."""
@@ -19,6 +25,44 @@ def vectorize(ex, model, single_answer=False):
     # Index words
     document = torch.LongTensor([word_dict[w] for w in ex['document']])
     question = torch.LongTensor([word_dict[w] for w in ex['question']])
+
+    sentence_boundaries = []
+    counter = 0
+    for sent in ex['sentences']:
+        sentence_boundaries.append([counter, counter + len(sent)])
+        counter += len(sent)
+
+    # If Sentence Selector is turned on, then run the document through and get the top sentence
+    if args.use_sentence_selector:
+        sentence_lengths = [len(sent) for sent in ex['sentences']]
+        max_length = max(sentence_lengths)
+        sentences = torch.LongTensor([pad_single_seq([word_dict[w] for w in sent], max_length) for sent in ex['sentences']])
+        ex_batch = sent_selector_batchify([sent_selector_vectorize(ex, model,single_answer)])
+        top_sentence = model.sentence_selector.predict(ex_batch)[0][0]
+        # Extract top sentence and change ex["document"] accordingly
+        # document = torch.LongTensor([word_dict[w] for w in ex['sentences'][top_sentence]])
+        # ex['document'] = ex['sentences'][top_sentence]
+
+        # Check if selected sentence contains any answer span
+        window = sentence_boundaries[top_sentence]
+        flag = True
+        for answer in ex['answers']:
+            if answer[0] >= window[0] and answer[1] < window[1]:
+                new_start = answer[0] - window[0]
+                new_end = answer[1] - window[0]
+                flag = False
+                break
+        # Set random span in the selected sentence as answer to predict? No it needs to predict that the answer does not exist
+        # Single Answer is False for development set
+        if flag and single_answer == True:
+            return None
+        if flag and len(ex['answers'])> 0:
+            ans_len = ex["answers"][0][1] + 1 - ex["answers"][0][0]
+            random_start_index = np.random.randint(window[1] - window[0])
+            new_start = random_start_index
+            new_end = random_start_index + ans_len - 1
+
+
 
     # Create extra features vector
     if len(feature_dict) > 0:
@@ -65,13 +109,26 @@ def vectorize(ex, model, single_answer=False):
         return document, features, question, ex['id']
 
     # ...or with target(s) (might still be empty if answers is empty)
+    # Find new locations in extracted Gold Sentence, if not, return a random sample of same length
     if single_answer:
         assert(len(ex['answers']) > 0)
-        start = torch.LongTensor(1).fill_(ex['answers'][0][0])
-        end = torch.LongTensor(1).fill_(ex['answers'][0][1])
+        if args.use_sentence_selector:
+            start = torch.LongTensor(1).fill_(new_start)
+            end = torch.LongTensor(1).fill_(new_end)
+        else:
+            start = torch.LongTensor(1).fill_(ex['answers'][0][0])
+            end = torch.LongTensor(1).fill_(ex['answers'][0][1])
     else:
-        start = [a[0] for a in ex['answers']]
-        end = [a[1] for a in ex['answers']]
+        # Do same and send as list
+        if len(ex['answers']) == 0:
+            start = []
+            end = []
+        elif args.use_sentence_selector:
+            start=  [new_start]
+            end = [new_end]
+        else:
+            start = [a[0] for a in ex['answers']]
+            end = [a[1] for a in ex['answers']]
 
     return document, features, question, start, end, ex['id']
 

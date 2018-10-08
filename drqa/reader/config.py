@@ -48,6 +48,12 @@ def add_model_args(parser):
     model.add_argument('--rnn-type', type=str, default='lstm',
                        help='RNN type: LSTM, GRU, or RNN')
 
+    #####################################################################
+    model.add_argument("--use_sentence_selector", action="store_true", default=False)
+    model.add_argument("--sentence_selector_model", type=str, default=None)
+    model.add_argument("--selection_threshold", type=float, default=0.9)
+    #####################################################################
+
     # Model specific details
     detail = parser.add_argument_group('DrQA Reader Model Details')
     detail.add_argument('--concat-rnn-layers', type='bool', default=True,
@@ -56,15 +62,15 @@ def add_model_args(parser):
                         help='The way of computing the question representation')
     detail.add_argument('--use-qemb', type='bool', default=True,
                         help='Whether to use weighted question embeddings')
-    detail.add_argument('--use-in-question', type='bool', default=True,
+    detail.add_argument('--use-in-question', type='bool', default=False,
                         help='Whether to use in_question_* features')
-    detail.add_argument('--use-pos', type='bool', default=True,
+    detail.add_argument('--use-pos', type='bool', default=False,
                         help='Whether to use pos features')
-    detail.add_argument('--use-ner', type='bool', default=True,
+    detail.add_argument('--use-ner', type='bool', default=False,
                         help='Whether to use ner features')
-    detail.add_argument('--use-lemma', type='bool', default=True,
+    detail.add_argument('--use-lemma', type='bool', default=False,
                         help='Whether to use lemma features')
-    detail.add_argument('--use-tf', type='bool', default=True,
+    detail.add_argument('--use-tf', type='bool', default=False,
                         help='Whether to use term frequency features')
 
     # Optimization details
@@ -93,6 +99,8 @@ def add_model_args(parser):
                        help='Explicitly account for padding in RNN encoding')
     optim.add_argument('--max-len', type=int, default=15,
                        help='The max span allowed during decoding')
+
+
 
 
 def get_model_args(args):

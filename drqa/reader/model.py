@@ -16,6 +16,7 @@ import copy
 from torch.autograd import Variable
 from .config import override_model_args
 from .rnn_reader import RnnDocReader
+from ..selector.model import SentenceSelector
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,12 @@ class DocReader(object):
                 self.network.register_buffer('fixed_embedding', fixed_embedding)
             else:
                 self.network.load_state_dict(state_dict)
+
+
+        # Load the sentence selector model, if present
+        if args.use_sentence_selector:
+            # Get State dict from pretrained sentence selector
+            self.sentence_selector = SentenceSelector.load(args.sentence_selector_model)
 
     def expand_dictionary(self, words):
         """Add words to the DocReader dictionary if they do not exist. The

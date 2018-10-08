@@ -125,7 +125,7 @@ class Predictor(object):
                           for i in range(len(candidates))]
 
         # Build the batch and run it through the model
-        batch_exs = batchify([vectorize(e, self.model) for e in examples])
+        batch_exs = batchify([v for v in [vectorize(e, self.model) for e in examples] if v is not None])
         s, e, score = self.model.predict(batch_exs, candidates, top_n)
 
         # Retrieve the predicted spans

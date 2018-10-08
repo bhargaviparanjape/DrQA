@@ -96,7 +96,8 @@ class ReaderDataset(Dataset):
         return len(self.examples)
 
     def __getitem__(self, index):
-        return vectorize(self.examples[index], self.model, self.single_answer)
+        vectorized_data =  vectorize(self.examples[index], self.model, self.single_answer)
+        return vectorized_data
 
     def lengths(self):
         return [(len(ex['document']), len(ex['question']))
