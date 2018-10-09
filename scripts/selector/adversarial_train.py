@@ -74,7 +74,6 @@ def add_train_args(parser):
     files.add_argument('--data-dir', type=str, default=DATA_DIR,
                        help='Directory of training/validation data')
     files.add_argument('--train-file', type=str,
-                       default='SQuAD-v1.1-train-processed-corenlp.txt',
                        help='Preprocessed train file', action='append')
     files.add_argument('--dev-file', type=str,
                        default='SQuAD-v1.1-dev-processed-corenlp.txt',

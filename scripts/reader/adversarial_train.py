@@ -14,7 +14,8 @@ import os
 import sys
 import subprocess
 import logging
-
+from os.path import realpath,dirname
+sys.path.append(dirname(dirname(dirname(realpath(__file__)))))
 
 from drqa.reader import utils, vector, config, data
 from drqa.reader import DocReader
@@ -75,7 +76,6 @@ def add_train_args(parser):
 					   help='Directory of training/validation data')
 	## Provide Facility for multiple datasets
 	files.add_argument('--train-file', type=str,
-					   default='SQuAD-v1.1-train-processed-corenlp.txt',
 					   help='Preprocessed train file', action="append")
 	files.add_argument('--dev-file', type=str,
 					   default='SQuAD-v1.1-dev-processed-corenlp.txt',
