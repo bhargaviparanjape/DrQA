@@ -292,11 +292,15 @@ def validate_official(args, data_loader, model, global_stats,
 
     # Run through examples
     examples = 0
+    bad_examples = 0
     for ex in data_loader:
         ex_id, batch_size = ex[-1], ex[0].size(0)
         pred_s, pred_e, _ = model.predict(ex)
 
         for i in range(batch_size):
+            if [pred_s[i][0]][0] >= len(offsets[ex_id[i]]) or [pred_s[i][0]][0] >= len(offsets[ex_id[i]]):
+                bad_examples += 1
+                continue
             s_offset = offsets[ex_id[i]][pred_s[i][0]][0]
             e_offset = offsets[ex_id[i]][pred_e[i][0]][1]
             prediction = texts[ex_id[i]][s_offset:e_offset]
@@ -314,7 +318,7 @@ def validate_official(args, data_loader, model, global_stats,
                 (global_stats['epoch'], exact_match.avg * 100) +
                 'F1 = %.2f | examples = %d | valid time = %.2f (s)' %
                 (f1.avg * 100, examples, eval_time.time()))
-
+    logger.info('Bad Offset Examples during official eval: %d' % bad_examples)
     return {'exact_match': exact_match.avg * 100, 'f1': f1.avg * 100}
 
 
