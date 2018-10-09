@@ -298,7 +298,7 @@ def validate_official(args, data_loader, model, global_stats,
         pred_s, pred_e, _ = model.predict(ex)
 
         for i in range(batch_size):
-            if [pred_s[i][0]][0] >= len(offsets[ex_id[i]]) or [pred_s[i][0]][0] >= len(offsets[ex_id[i]]):
+            if pred_s[i][0] >= len(offsets[ex_id[i]]) or pred_e[i][0] >= len(offsets[ex_id[i]]):
                 bad_examples += 1
                 continue
             s_offset = offsets[ex_id[i]][pred_s[i][0]][0]

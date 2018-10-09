@@ -11,6 +11,7 @@ import torch
 from ..selector.vector import vectorize as sent_selector_vectorize
 from ..selector.vector import batchify_sentences as sent_selector_batchify
 import numpy as np
+import pdb
 
 def pad_single_seq(seq, max_len, pad_token = 0):
     seq += [pad_token for i in range(max_len - len(seq))]
@@ -62,15 +63,18 @@ def vectorize(ex, model, single_answer=False):
                 new_end = answer[1] - window[0]
                 flag = False
                 break
-        # Set random span in the selected sentence as answer to predict? No it needs to predict that the answer does not exist
         # Single Answer is False for development set
         if flag and single_answer == True:
             return []
-        if flag and len(ex['answers'])> 0:
-            ans_len = ex["answers"][0][1] + 1 - ex["answers"][0][0]
-            random_start_index = np.random.randint(window[1] - window[0])
-            new_start = random_start_index
-            new_end = random_start_index + ans_len - 1
+        if not single_answer and len(ex['answers'])> 0:
+            new_start = []
+            new_end = []
+            for top_sentence in ex["gold_sentence_ids"]:
+                window = sentence_boundaries[top_sentence]
+                for answer in ex['answers']:
+                    if answer[0] >= window[0] and answer[1] < window[1]:
+                        new_start.append(answer[0] - window[0])
+                        new_end.append(answer[1] - window[0])
 
 
 
@@ -134,8 +138,8 @@ def vectorize(ex, model, single_answer=False):
             start = []
             end = []
         elif args.use_sentence_selector:
-            start=  [new_start]
-            end = [new_end]
+            start = new_start
+            end = new_end
         else:
             start = [a[0] for a in ex['answers']]
             end = [a[1] for a in ex['answers']]

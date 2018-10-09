@@ -449,7 +449,8 @@ class DocReader(object):
         state_dict = saved_params['state_dict']
         args = saved_params['args']
         if new_args:
-            args = override_model_args(args, new_args)
+            # args = override_model_args(args, new_args)
+            args = new_args
         return DocReader(args, word_dict, feature_dict, state_dict, normalize)
 
     @staticmethod
