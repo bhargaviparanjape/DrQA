@@ -57,6 +57,7 @@ def vectorize(ex, model, single_answer=False):
         ex['offsets'] = [[t[0] - initial_offset, t[1] - initial_offset] for t in offset_subset]
 
         # Check if selected sentence contains any answer span
+        # account for answers being in between the gold sentence
         window = sentence_boundaries[top_sentence]
         flag = True
         for answer in ex['answers']:
@@ -65,18 +66,26 @@ def vectorize(ex, model, single_answer=False):
                 new_end = answer[1] - window[0]
                 flag = False
                 break
+            elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top_sentence + 1][1]:
+                new_start = answer[0] - window[0]
+                new_end = window[1] - window[0] - 1
+                flag = False
+                break
         # Single Answer is False for development set
         if flag and single_answer == True:
             return []
         if not single_answer and len(ex['answers'])> 0:
             new_start = []
             new_end = []
-            for top_sentence in ex["gold_sentence_ids"]:
-                window = sentence_boundaries[top_sentence]
+            for top in ex["gold_sentence_ids"]:
+                window = sentence_boundaries[top]
                 for answer in ex['answers']:
                     if answer[0] >= window[0] and answer[1] < window[1]:
                         new_start.append(answer[0] - window[0])
                         new_end.append(answer[1] - window[0])
+                    elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top + 1][1]:
+                        new_start.append(answer[0] - window[0])
+                        new_end.append(answer[1] - window[1])
 
 
 

@@ -36,7 +36,6 @@ class Tokens(object):
     def untokenize(self):
         """Returns the original text (with whitespace reinserted)."""
         return ''.join([t[self.TEXT_WS] for t in self.data]).strip()
-    
     '''
     def sentences(self):
         sentences = []
