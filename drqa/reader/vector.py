@@ -45,8 +45,10 @@ def vectorize(ex, model, single_answer=False):
                 return []
             top_sentence = ex['gold_sentence_ids'][0]
         else:
-            ex_batch = sent_selector_batchify([sent_selector_vectorize(ex, model,single_answer)])
+            ex_batch = sent_selector_batchify([sent_selector_vectorize(ex, model.sentence_selector, single_answer)])
             top_sentence = model.sentence_selector.predict(ex_batch)[0][0]
+            if len(ex['gold_sentence_ids']) > 0 and top_sentence not in ex['gold_sentence_ids']:
+                return []
         # Extract top sentence and change ex["document"] accordingly
         document = torch.LongTensor([word_dict[w] for w in ex['sentences'][top_sentence]])
         ex['document'] = ex['sentences'][top_sentence]

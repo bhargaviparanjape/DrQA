@@ -18,6 +18,7 @@ from os.path import dirname,realpath
 sys.path.append(dirname(dirname(dirname(realpath(__file__)))))
 from drqa.reader import utils, vector, config, data
 from drqa.reader import DocReader
+from drqa.selector import SentenceSelector
 from drqa import DATA_DIR as DRQA_DATA
 
 logger = logging.getLogger()
@@ -498,6 +499,9 @@ def main(args):
                                        dev_offsets, dev_texts, dev_answers)
         print(result2[args.valid_metric])
         print(result1["exact_match"])
+        # Validate Sentence selector of this model
+        #if args.use_sentence_selector:
+        #    result = validate_unofficial(model.sentence_selector.args, dev_loader,  
         exit(0)
 
 
