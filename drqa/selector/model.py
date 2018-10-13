@@ -44,7 +44,7 @@ class SentenceSelector(object):
         # Building network. If normalize if false, scores are not normalized
         # 0-1 per paragraph (no softmax).
         if args.model_type == 'rnn':
-            self.network = RnnSentSelector(args, normalize)
+                self.network = RnnSentSelector(args, normalize)
         else:
             raise RuntimeError('Unsupported model: %s' % args.modeml_type)
 

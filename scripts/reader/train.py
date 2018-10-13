@@ -7,17 +7,22 @@
 """Main DrQA reader training script."""
 
 import argparse
-import torch
-import numpy as np
 import json
-import os
-import sys
-import subprocess
 import logging
-from os.path import dirname,realpath
+import os
+import subprocess
+import sys
+from os.path import dirname, realpath
+
+import numpy as np
+import torch
+
 sys.path.append(dirname(dirname(dirname(realpath(__file__)))))
-from drqa.reader import utils, vector, config, data
+from drqa.reader import utils, config
+from drqa.reader import data as reader_data, vector as reader_vector
+from drqa.selector import data as selector_data, vector as selector_vector
 from drqa.reader import DocReader
+from scripts.selector.train import validate_unofficial as validate_selector
 from drqa import DATA_DIR as DRQA_DATA
 
 logger = logging.getLogger()
@@ -49,7 +54,7 @@ def add_train_args(parser):
                          help='Train on CPU, even if GPUs are available.')
     runtime.add_argument('--gpu', type=int, default=-1,
                          help='Run on a specific GPU')
-    runtime.add_argument('--data-workers', type=int, default=5,
+    runtime.add_argument('--data-workers', type=int, default=1,
                          help='Number of subprocesses for data loading')
     runtime.add_argument('--parallel', type='bool', default=False,
                          help='Use DataParallel on all available GPUs')
@@ -382,6 +387,22 @@ def main(args):
         dev_offsets = {ex['id']: ex['offsets'] for ex in dev_exs}
         dev_answers = utils.load_answers(args.dev_json)
 
+    if args.use_sentence_selector:
+        dev_offsets = {}
+        for ex in dev_exs:
+            if len(ex["gold_sentence_ids"]) == 0:
+                continue
+            top_sentence = ex["gold_sentence_ids"][0]
+            sentence_boundaries = []
+            counter = 0
+            for sent in ex['sentences']:
+                sentence_boundaries.append([counter, counter + len(sent)])
+                counter += len(sent)
+            offset_subset = ex["offsets"][sentence_boundaries[top_sentence][0]:sentence_boundaries[top_sentence][1]]
+            initial_offset = offset_subset[0][0]
+            new_offset = [[t[0] - initial_offset, t[1] - initial_offset] for t in offset_subset]
+            dev_offsets[ex['id']] = new_offset
+
     # --------------------------------------------------------------------------
     # MODEL
     logger.info('-' * 100)
@@ -442,12 +463,12 @@ def main(args):
     # Sentence selection objective : run the sentence selector as a submodule
     logger.info('-' * 100)
     logger.info('Make data loaders')
-    train_dataset = data.ReaderDataset(train_exs, model, single_answer=True)
+    train_dataset = reader_data.ReaderDataset(train_exs, model, single_answer=True)
     # Filter out None examples in training dataset (where sentence selection fails)
 
     train_dataset.examples = [t for t in train_dataset.examples if t is not None]
     if args.sort_by_len:
-        train_sampler = data.SortedBatchSampler(train_dataset.lengths(),
+        train_sampler = reader_data.SortedBatchSampler(train_dataset.lengths(),
                                                 args.batch_size,
                                                 shuffle=True)
     else:
@@ -457,13 +478,13 @@ def main(args):
         batch_size=args.batch_size,
         sampler=train_sampler,
         num_workers=args.data_workers,
-        collate_fn=vector.batchify,
+        collate_fn=reader_vector.batchify,
         pin_memory=args.cuda,
     )
-    dev_dataset = data.ReaderDataset(dev_exs, model, single_answer=False)
+    dev_dataset = reader_data.ReaderDataset(dev_exs, model, single_answer=False)
     dev_dataset.examples = [t for t in dev_dataset.examples if t is not None]
     if args.sort_by_len:
-        dev_sampler = data.SortedBatchSampler(dev_dataset.lengths(),
+        dev_sampler = reader_data.SortedBatchSampler(dev_dataset.lengths(),
                                               args.test_batch_size,
                                               shuffle=False)
     else:
@@ -473,9 +494,28 @@ def main(args):
         batch_size=args.test_batch_size,
         sampler=dev_sampler,
         num_workers=args.data_workers,
-        collate_fn=vector.batchify,
+        collate_fn=reader_vector.batchify,
         pin_memory=args.cuda,
     )
+
+    ## Dev dataset for measuring performance of the trained sentence selector
+    dev_dataset1 = selector_data.SentenceSelectorDataset(dev_exs, model, single_answer=False)
+    dev_dataset1.examples = [t for t in dev_dataset.examples if t is not None]
+    if args.sort_by_len:
+        dev_sampler1 = selector_data.SortedBatchSampler(dev_dataset1.lengths(),
+                                              args.test_batch_size,
+                                              shuffle=False)
+    else:
+        dev_sampler1 = torch.utils.data.sampler.SequentialSampler(dev_dataset1)
+    dev_loader1 = torch.utils.data.DataLoader(
+        dev_dataset1,
+        batch_size=args.test_batch_size,
+        sampler=dev_sampler1,
+        num_workers=args.data_workers,
+        collate_fn=selector_vector.batchify,
+        pin_memory=args.cuda,
+    )
+
 
     # -------------------------------------------------------------------------
     # PRINT CONFIG
@@ -498,6 +538,11 @@ def main(args):
                                        dev_offsets, dev_texts, dev_answers)
         print(result2[args.valid_metric])
         print(result1["exact_match"])
+        if args.use_sentence_selector:
+            sent_stats = {'timer': utils.Timer(), 'epoch': 0, 'best_valid': 0}
+            sent_selector_results = validate_selector(model.sentence_selector.args, dev_loader1, model.sentence_selector, sent_stats, mode="dev")
+        print("Sentence Selector model acheives:")
+        print(sent_selector_results["accuracy"])
         exit(0)
 
 

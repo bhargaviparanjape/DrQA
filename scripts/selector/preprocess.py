@@ -88,14 +88,14 @@ def process_dataset(data, tokenizer, workers=None):
     tokenizer_class = tokenizers.get_class(tokenizer)
     make_pool = partial(Pool, workers, initializer=init)
 
-    #workers = make_pool(initargs=(tokenizer_class, {'annotators': {'lemma'}, 'classpath' : "/home/bhargavi/robust_nlp/invariance/DrQA/data/corenlp/*"}))
+    # workers = make_pool(initargs=(tokenizer_class, {'annotators': {'lemma'}, 'classpath' : "/home/bhargavi/robust_nlp/invariance/DrQA/data/corenlp/*"}))
     workers = make_pool(initargs=(tokenizer_class, {'annotators': {'lemma'}}))
     q_tokens = workers.map(tokenize, data['questions'])
     workers.close()
     workers.join()
 
     workers = make_pool(
-	#initargs=(tokenizer_class, {'annotators': {'lemma', 'pos', 'ner'},'classpath' : "/home/bhargavi/robust_nlp/invariance/DrQA/data/corenlp/*"})
+	# initargs=(tokenizer_class, {'annotators': {'lemma', 'pos', 'ner'},'classpath' : "/home/bhargavi/robust_nlp/invariance/DrQA/data/corenlp/*"})
         initargs=(tokenizer_class, {'annotators': {'lemma', 'pos', 'ner'}})
     )
     c_tokens = workers.map(tokenize, data['contexts'])
@@ -132,13 +132,13 @@ def process_dataset(data, tokenizer, workers=None):
         ans_tokens_list = list(set(ans_tokens))
         sentences = []
         gold_sentence_ids = []
-        for idx, tup in enumerate(context_sentence_boundaries):
+        for s_idx, tup in enumerate(context_sentence_boundaries):
             for a in ans_tokens_list:
                 if a[0] >= tup[0] and a[1] < tup[1]:
-                    gold_sentence_ids.append(idx)
+                    gold_sentence_ids.append(s_idx)
                 elif a[0] >= tup[0] and a[0] < tup[1] and a[1] >= tup[1]:
-                    gold_sentence_ids.append(idx)
-                    gold_sentence_ids.append(idx+1)
+                    gold_sentence_ids.append(s_idx)
+                    gold_sentence_ids.append(s_idx+1)
             sentence = document[tup[0]:tup[1]]
             sentences.append(sentence)
         gold_sentence_ids_set = list(set(gold_sentence_ids))

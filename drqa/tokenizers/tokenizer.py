@@ -37,12 +37,14 @@ class Tokens(object):
         """Returns the original text (with whitespace reinserted)."""
         return ''.join([t[self.TEXT_WS] for t in self.data]).strip()
 
+    '''
     def sentences(self):
         sentences = []
         for idx, tup in enumerate(self.sentence_boundaries):
             sentence = [t[self.TEXT].lower() for t in self.data[tup[0]:tup[1]]]
             sentences.append(sentence)
         return sentences
+    '''
 
     def sentences(self):
         return self.sentence_boundaries
