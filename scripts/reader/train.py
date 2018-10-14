@@ -24,7 +24,6 @@ from drqa.selector import data as selector_data, vector as selector_vector
 from drqa.reader import DocReader
 from drqa.selector import SentenceSelector
 from scripts.selector.train import validate_unofficial as validate_selector
->>>>>>> 6b77fbdbd0abf0aa2eb9d5f892588fcc075c3f06
 from drqa import DATA_DIR as DRQA_DATA
 
 logger = logging.getLogger()
@@ -393,6 +392,7 @@ def main(args):
         dev_offsets = {}
         for ex in dev_exs:
             if len(ex["gold_sentence_ids"]) == 0:
+                dev_offsets[ex['id']] = ex["offsets"]
                 continue
             top_sentence = ex["gold_sentence_ids"][0]
             sentence_boundaries = []
