@@ -34,6 +34,7 @@ def vectorize(ex, model, single_answer=False):
         counter += len(sent)
 
     # If Sentence Selector is turned on, then run the document through and get the top sentence
+    selected_offset = None
     if args.use_sentence_selector:
         sentence_lengths = [len(sent) for sent in ex['sentences']]
         max_length = max(sentence_lengths)
@@ -45,14 +46,16 @@ def vectorize(ex, model, single_answer=False):
                 return []
             top_sentence = ex['gold_sentence_ids'][0]
         else:
-            ex_batch = sent_selector_batchify([sent_selector_vectorize(ex, model,single_answer)])
+            ex_batch = sent_selector_batchify([sent_selector_vectorize(ex, model.sentence_selector, single_answer)])
             top_sentence = model.sentence_selector.predict(ex_batch)[0][0]
         # Extract top sentence and change ex["document"] accordingly
         document = torch.LongTensor([word_dict[w] for w in ex['sentences'][top_sentence]])
         ex['document'] = ex['sentences'][top_sentence]
         offset_subset = ex["offsets"][sentence_boundaries[top_sentence][0]:sentence_boundaries[top_sentence][1]]
         initial_offset = offset_subset[0][0]
-        ex['offsets'] = [[t[0] - initial_offset, t[1] - initial_offset] for t in offset_subset]
+        new_offset_subset = [[t[0] - initial_offset, t[1] - initial_offset] for t in offset_subset]
+
+        selected_offset = new_offset_subset
 
         # Check if selected sentence contains any answer span
         # account for answers being in between the gold sentence
@@ -153,7 +156,7 @@ def vectorize(ex, model, single_answer=False):
             start = [a[0] for a in ex['answers']]
             end = [a[1] for a in ex['answers']]
 
-    return document, features, question, start, end, ex['id']
+    return document, features, question, selected_offset, start, end, ex['id']
 
 
 def batchify(batch):
@@ -168,6 +171,8 @@ def batchify(batch):
     docs = [ex[0] for ex in batch]
     features = [ex[1] for ex in batch]
     questions = [ex[2] for ex in batch]
+    offsets = [ex[3] for ex in batch]
+
 
     # Batch documents and features
     max_length = max([d.size(0) for d in docs])
@@ -198,12 +203,12 @@ def batchify(batch):
     elif len(batch[0]) == NUM_INPUTS + NUM_EXTRA + NUM_TARGETS:
         # ...Otherwise add targets
         if torch.is_tensor(batch[0][3]):
-            y_s = torch.cat([ex[3] for ex in batch])
-            y_e = torch.cat([ex[4] for ex in batch])
+            y_s = torch.cat([ex[4] for ex in batch])
+            y_e = torch.cat([ex[5] for ex in batch])
         else:
-            y_s = [ex[3] for ex in batch]
-            y_e = [ex[4] for ex in batch]
+            y_s = [ex[4] for ex in batch]
+            y_e = [ex[5] for ex in batch]
     else:
         raise RuntimeError('Incorrect number of inputs per example.')
 
-    return x1, x1_f, x1_mask, x2, x2_mask, y_s, y_e, ids
+    return x1, x1_f, x1_mask, x2, x2_mask, y_s, y_e, offsets, ids
