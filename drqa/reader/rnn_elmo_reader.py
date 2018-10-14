@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 from . import layers
 
+
 # ------------------------------------------------------------------------------
 # Network
 # ------------------------------------------------------------------------------
@@ -36,6 +37,7 @@ class RnnDocReader(nn.Module):
         doc_input_size = args.embedding_dim + args.num_features
         if args.use_qemb:
             doc_input_size += args.embedding_dim
+
 
         # RNN document encoder
         self.doc_rnn = layers.StackedBRNN(

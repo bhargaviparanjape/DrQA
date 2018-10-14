@@ -243,7 +243,7 @@ def train(args, data_loader, model, global_stats):
 # ------------------------------------------------------------------------------
 
 
-def validate_unofficial(args, data_loader, model, global_stats, mode):
+def validate_unnofficial(args, data_loader, model, global_stats, mode):
     """Run one full unofficial validation.
     Unofficial = doesn't use SQuAD script.
     """
