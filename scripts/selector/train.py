@@ -74,7 +74,7 @@ def add_train_args(parser):
     files.add_argument('--data-dir', type=str, default=DATA_DIR,
                        help='Directory of training/validation data')
     files.add_argument('--train-file', type=str,
-                       default='SQuAD-v1.1-train-processed-corenlp.txt',
+                       action="append",
                        help='Preprocessed train file')
     files.add_argument('--dev-file', type=str,
                        default='SQuAD-v1.1-dev-processed-corenlp.txt',
@@ -124,9 +124,11 @@ def set_defaults(args):
     args.dev_json = os.path.join(args.data_dir, args.dev_json)
     if not os.path.isfile(args.dev_json):
         raise IOError('No such file: %s' % args.dev_json)
-    args.train_file = os.path.join(args.data_dir, args.train_file)
-    if not os.path.isfile(args.train_file):
-        raise IOError('No such file: %s' % args.train_file)
+    train_files = []
+    for t_file in args.train_file:
+        fullpath = os.path.join(args.data_dir, t_file)
+        train_files.append(fullpath)
+    vars(args)["train_file"] = train_files
     args.dev_file = os.path.join(args.data_dir, args.dev_file)
     if not os.path.isfile(args.dev_file):
         raise IOError('No such file: %s' % args.dev_file)
@@ -243,7 +245,7 @@ def train(args, data_loader, model, global_stats):
 # ------------------------------------------------------------------------------
 
 
-def validate_unnofficial(args, data_loader, model, global_stats, mode):
+def validate_unofficial(args, data_loader, model, global_stats, mode):
     """Run one full unofficial validation.
     Unofficial = doesn't use SQuAD script.
     """
@@ -384,7 +386,10 @@ def main(args):
     # DATA
     logger.info('-' * 100)
     logger.info('Load data files')
-    train_exs = utils.load_data(args, args.train_file, skip_no_answer=True)
+    train_exs = []
+    for t_file in args.train_file:
+        train_exs += utils.load_data(args, t_file, skip_no_answer=True)
+    np.random.shuffle(train_exs)
     logger.info('Num train examples = %d' % len(train_exs))
     dev_exs = utils.load_data(args, args.dev_file)
     logger.info('Num dev examples = %d' % len(dev_exs))

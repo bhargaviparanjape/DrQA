@@ -171,8 +171,8 @@ class RnnSentSelector(nn.Module):
 
 
         ### Fancy interaction between question and hidden layer ###
-        '''
         # Repeat question_hidden for sequence length of document
+        '''
         question_hidden_expaned = question_hidden.unsqueeze(1).expand(question_hidden.shape[0], doc_hiddens.shape[1], question_hidden.shape[1]).contiguous()
         scores = self.sentence_scorer(doc_hiddens, question_hidden_expaned)
         # Max of the scores (needs to be masked)

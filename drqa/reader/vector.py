@@ -48,16 +48,16 @@ def vectorize(ex, model, single_answer=False):
         else:
             ex_batch = sent_selector_batchify([sent_selector_vectorize(ex, model.sentence_selector, single_answer)])
             top_sentence = model.sentence_selector.predict(ex_batch)[0][0]
-            if len(ex['gold_sentence_ids']) > 0 and top_sentence not in ex['gold_sentence_ids']:
-                return []
+            #if len(ex['gold_sentence_ids']) > 0 and top_sentence not in ex['gold_sentence_ids']:
+            #    return []
         # Extract top sentence and change ex["document"] accordingly
         document = torch.LongTensor([word_dict[w] for w in ex['sentences'][top_sentence]])
         ex['document'] = ex['sentences'][top_sentence]
         offset_subset = ex["offsets"][sentence_boundaries[top_sentence][0]:sentence_boundaries[top_sentence][1]]
-        initial_offset = offset_subset[0][0]
-        new_offset_subset = [[t[0] - initial_offset, t[1] - initial_offset] for t in offset_subset]
+        # initial_offset = offset_subset[0][0]
+        # new_offset_subset = [[t[0] - initial_offset, t[1] - initial_offset] for t in offset_subset]
 
-        selected_offset = new_offset_subset
+        selected_offset = offset_subset
 
         # Check if selected sentence contains any answer span
         # account for answers being in between the gold sentence
@@ -165,7 +165,7 @@ def batchify(batch):
     """Gather a batch of individual examples into one batch."""
     NUM_INPUTS = 3
     NUM_TARGETS = 2
-    NUM_EXTRA = 1
+    NUM_EXTRA = 2
 
     batch = [ex for ex in batch if len(ex) != 0]
 
@@ -204,7 +204,7 @@ def batchify(batch):
 
     elif len(batch[0]) == NUM_INPUTS + NUM_EXTRA + NUM_TARGETS:
         # ...Otherwise add targets
-        if torch.is_tensor(batch[0][3]):
+        if torch.is_tensor(batch[0][4]):
             y_s = torch.cat([ex[4] for ex in batch])
             y_e = torch.cat([ex[5] for ex in batch])
         else:

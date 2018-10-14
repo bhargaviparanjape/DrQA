@@ -79,8 +79,7 @@ def add_train_args(parser):
                        help='Unique model identifier (.mdl, .txt, .checkpoint)')
     files.add_argument('--data-dir', type=str, default=DATA_DIR,
                        help='Directory of training/validation data')
-    files.add_argument('--train-file', type=str,
-                       default='SQuAD-v1.1-train-processed-corenlp.txt',
+    files.add_argument('--train-file', type=str, action = "append",
                        help='Preprocessed train file')
     files.add_argument('--dev-file', type=str,
                        default='SQuAD-v1.1-dev-processed-corenlp.txt',
@@ -130,9 +129,11 @@ def set_defaults(args):
     args.dev_json = os.path.join(args.data_dir, args.dev_json)
     if not os.path.isfile(args.dev_json):
         raise IOError('No such file: %s' % args.dev_json)
-    args.train_file = os.path.join(args.data_dir, args.train_file)
-    if not os.path.isfile(args.train_file):
-        raise IOError('No such file: %s' % args.train_file)
+    train_files = []
+    for t_file in args.train_file:
+        fullpath = os.path.join(args.data_dir, t_file)
+        train_files.append(fullpath)
+    vars(args)["train_file"] = train_files
     args.dev_file = os.path.join(args.data_dir, args.dev_file)
     if not os.path.isfile(args.dev_file):
         raise IOError('No such file: %s' % args.dev_file)
@@ -260,7 +261,7 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
     for ex in data_loader:
         batch_size = ex[0].size(0)
         pred_s, pred_e, _ = model.predict(ex)
-        target_s, target_e = ex[-3:-1]
+        target_s, target_e = ex[-4:-2]
 
         # We get metrics for independent start/end and joint start/end
         accuracies = eval_accuracies(pred_s, target_s, pred_e, target_e)
@@ -305,11 +306,15 @@ def validate_official(args, data_loader, model, global_stats,
         pred_s, pred_e, _ = model.predict(ex)
 
         for i in range(batch_size):
-            if pred_s[i][0] >= len(offsets[ex_id[i]]) or pred_e[i][0] >= len(offsets[ex_id[i]]):
-                bad_examples += 1
-                continue
-            s_offset = chosen_offset[pred_s[i][0]][0]
-            e_offset = chosen_offset[pred_e[i][0]][1]
+            #if pred_s[i][0] >= len(offsets[ex_id[i]]) or pred_e[i][0] >= len(offsets[ex_id[i]]):
+            #    bad_examples += 1
+            #    continue
+            if args.use_sentence_selector:
+                s_offset = chosen_offset[i][pred_s[i][0]][0]
+                e_offset = chosen_offset[i][pred_e[i][0]][1]
+            else:
+                s_offset = offsets[ex_id[i]][pred_s[i][0]][0]
+                e_offset = offsets[ex_id[i]][pred_e[i][0]][0]
             prediction = texts[ex_id[i]][s_offset:e_offset]
 
             # Compute metrics
@@ -372,15 +377,19 @@ def eval_accuracies(pred_s, target_s, pred_e, target_e):
 
 
 def main(args):
+    
     # --------------------------------------------------------------------------
     # DATA
     logger.info('-' * 100)
     logger.info('Load data files')
-    train_exs = utils.load_data(args, args.train_file, skip_no_answer=True)
+    train_exs = []  
+    for t_file in args.train_file:
+        train_exs += utils.load_data(args, t_file, skip_no_answer=True)
+    np.random.shuffle(train_exs)
     logger.info('Num train examples = %d' % len(train_exs))
     dev_exs = utils.load_data(args, args.dev_file)
     logger.info('Num dev examples = %d' % len(dev_exs))
-
+    
     # If we are doing offician evals then we need to:
     # 1) Load the original text to retrieve spans from offsets.
     # 2) Load the (multiple) text answers for each question.
@@ -403,10 +412,10 @@ def main(args):
             for sent in ex['sentences']:
                 sentence_boundaries.append([counter, counter + len(sent)])
                 counter += len(sent)
-            offset_subset = ex["offsets"][sentence_boundaries[top_sentence][0]:sentence_boundaries[top_sentence][1]]
-            initial_offset = offset_subset[0][0]
-            new_offset = [[t[0] - initial_offset, t[1] - initial_offset] for t in offset_subset]
-            dev_offsets[ex['id']] = new_offset
+            #offset_subset = ex["offsets"][sentence_boundaries[top_sentence][0]:sentence_boundaries[top_sentence][1]]
+            #initial_offset = offset_subset[0][0]
+            #new_offset = [[t[0] - initial_offset, t[1] - initial_offset] for t in offset_subset]
+            #dev_offsets[ex['id']] = new_offset
 
     # --------------------------------------------------------------------------
     # MODEL
@@ -471,7 +480,7 @@ def main(args):
     train_dataset = reader_data.ReaderDataset(train_exs, model, single_answer=True)
     # Filter out None examples in training dataset (where sentence selection fails)
 
-    train_dataset.examples = [t for t in train_dataset.examples if t is not None]
+    #train_dataset.examples = [t for t in train_dataset.examples if t is not None]
     if args.sort_by_len:
         train_sampler = reader_data.SortedBatchSampler(train_dataset.lengths(),
                                                 args.batch_size,
@@ -487,7 +496,7 @@ def main(args):
         pin_memory=args.cuda,
     )
     dev_dataset = reader_data.ReaderDataset(dev_exs, model, single_answer=False)
-    dev_dataset.examples = [t for t in dev_dataset.examples if t is not None]
+    #dev_dataset.examples = [t for t in dev_dataset.examples if t is not None]
     if args.sort_by_len:
         dev_sampler = reader_data.SortedBatchSampler(dev_dataset.lengths(),
                                               args.test_batch_size,
@@ -502,24 +511,26 @@ def main(args):
         collate_fn=reader_vector.batchify,
         pin_memory=args.cuda,
     )
-
+    
     ## Dev dataset for measuring performance of the trained sentence selector
-    dev_dataset1 = selector_data.SentenceSelectorDataset(dev_exs, model, single_answer=False)
-    dev_dataset1.examples = [t for t in dev_dataset.examples if t is not None]
-    if args.sort_by_len:
-        dev_sampler1 = selector_data.SortedBatchSampler(dev_dataset1.lengths(),
-                                              args.test_batch_size,
-                                              shuffle=False)
-    else:
-        dev_sampler1 = torch.utils.data.sampler.SequentialSampler(dev_dataset1)
-    dev_loader1 = torch.utils.data.DataLoader(
-        dev_dataset1,
-        batch_size=args.test_batch_size,
-        sampler=dev_sampler1,
-        num_workers=args.data_workers,
-        collate_fn=selector_vector.batchify,
-        pin_memory=args.cuda,
-    )
+    if args.use_sentence_selector:
+        selector = SentenceSelector.load(args.sentence_selector_model, args)
+        dev_dataset1 = selector_data.SentenceSelectorDataset(dev_exs, selector, single_answer=False)
+        #dev_dataset1.examples = [t for t in dev_dataset.examples if t is not None]
+        if args.sort_by_len:
+            dev_sampler1 = selector_data.SortedBatchSampler(dev_dataset1.lengths(),
+                                                  args.test_batch_size,
+                                                  shuffle=False)
+        else:
+            dev_sampler1 = torch.utils.data.sampler.SequentialSampler(dev_dataset1)
+        dev_loader1 = torch.utils.data.DataLoader(
+            dev_dataset1,
+            batch_size=args.test_batch_size,
+            sampler=dev_sampler1,
+            num_workers=args.data_workers,
+            collate_fn=selector_vector.batchify,
+            pin_memory=args.cuda,
+        )
 
 
     # -------------------------------------------------------------------------
@@ -527,7 +538,7 @@ def main(args):
     logger.info('-' * 100)
     logger.info('CONFIG:\n%s' %
                 json.dumps(vars(args), indent=4, sort_keys=True))
-
+    
 
     # --------------------------------------------------------------------------
     # TRAIN/VALID LOOP
@@ -537,6 +548,7 @@ def main(args):
 
     # --------------------------------------------------------------------------
     # QUICKLY VALIDATE ON PRETRAINED MODEL
+    
     if args.global_mode == "test":
         result1 = validate_unofficial(args, dev_loader, model, stats, mode='dev')
         result2 = validate_official(args, dev_loader, model, stats,
@@ -546,8 +558,11 @@ def main(args):
         if args.use_sentence_selector:
             sent_stats = {'timer': utils.Timer(), 'epoch': 0, 'best_valid': 0}
             sent_selector_results = validate_selector(model.sentence_selector.args, dev_loader1, model.sentence_selector, sent_stats, mode="dev")
-        print("Sentence Selector model acheives:")
-        print(sent_selector_results["accuracy"])
+            sent_selector_results1 = validate_selector(selector.args, dev_loader1, selector, sent_stats, mode="dev")
+            print("Sentence Selector model acheives:")
+            print(sent_selector_results["accuracy"])
+            print("Sentence Selector 1 gets:")
+            print(sent_selector_results1["accuracy"])
         exit(0)
 
 
