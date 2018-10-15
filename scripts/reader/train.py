@@ -495,24 +495,24 @@ def main(args):
     )
     
     ## Dev dataset for measuring performance of the trained sentence selector
-    if args.use_sentence_selector:
-        selector = SentenceSelector.load(args.sentence_selector_model, args)
-        dev_dataset1 = selector_data.SentenceSelectorDataset(dev_exs, selector, single_answer=False)
-        #dev_dataset1.examples = [t for t in dev_dataset.examples if t is not None]
-        if args.sort_by_len:
-            dev_sampler1 = selector_data.SortedBatchSampler(dev_dataset1.lengths(),
-                                                  args.test_batch_size,
-                                                  shuffle=False)
-        else:
-            dev_sampler1 = torch.utils.data.sampler.SequentialSampler(dev_dataset1)
-        dev_loader1 = torch.utils.data.DataLoader(
-            dev_dataset1,
-            batch_size=args.test_batch_size,
-            sampler=dev_sampler1,
-            num_workers=args.data_workers,
-            collate_fn=selector_vector.batchify,
-            pin_memory=args.cuda,
-        )
+    # if args.use_sentence_selector:
+    #     selector = SentenceSelector.load(args.sentence_selector_model, args)
+    #     dev_dataset1 = selector_data.SentenceSelectorDataset(dev_exs, selector, single_answer=False)
+    #     #dev_dataset1.examples = [t for t in dev_dataset.examples if t is not None]
+    #     if args.sort_by_len:
+    #         dev_sampler1 = selector_data.SortedBatchSampler(dev_dataset1.lengths(),
+    #                                               args.test_batch_size,
+    #                                               shuffle=False)
+    #     else:
+    #         dev_sampler1 = torch.utils.data.sampler.SequentialSampler(dev_dataset1)
+    #     dev_loader1 = torch.utils.data.DataLoader(
+    #         dev_dataset1,
+    #         batch_size=args.test_batch_size,
+    #         sampler=dev_sampler1,
+    #         num_workers=args.data_workers,
+    #         collate_fn=selector_vector.batchify,
+    #         pin_memory=args.cuda,
+    #     )
 
 
     # -------------------------------------------------------------------------
@@ -540,11 +540,11 @@ def main(args):
         if args.use_sentence_selector:
             sent_stats = {'timer': utils.Timer(), 'epoch': 0, 'best_valid': 0}
             sent_selector_results = validate_selector(model.sentence_selector.args, dev_loader1, model.sentence_selector, sent_stats, mode="dev")
-            sent_selector_results1 = validate_selector(selector.args, dev_loader1, selector, sent_stats, mode="dev")
+            # sent_selector_results1 = validate_selector(selector.args, dev_loader1, selector, sent_stats, mode="dev")
             print("Sentence Selector model acheives:")
             print(sent_selector_results["accuracy"])
-            print("Sentence Selector 1 gets:")
-            print(sent_selector_results1["accuracy"])
+            # print("Sentence Selector 1 gets:")
+            # print(sent_selector_results1["accuracy"])
         exit(0)
 
     valid_history = []

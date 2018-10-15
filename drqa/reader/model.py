@@ -63,7 +63,10 @@ class DocReader(object):
         # Load the sentence selector model, if present
         if args.use_sentence_selector:
             # Get State dict from pretrained sentence selector
-            self.sentence_selector = SentenceSelector.load(args.sentence_selector_model)
+            if args.sentence_selector_model:
+                self.sentence_selector = SentenceSelector.load(args.sentence_selector_model)
+            else:
+                self.sentence_selector = None
 
     def expand_dictionary(self, words):
         """Add words to the DocReader dictionary if they do not exist. The
