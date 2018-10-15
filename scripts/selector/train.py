@@ -64,6 +64,7 @@ def add_train_args(parser):
     runtime.add_argument('--test-batch-size', type=int, default=32,
                          help='Batch size during validation/testing')
     runtime.add_argument('--global_mode', type=str, default="train", help="global mode: {train, test}")
+    runtime.add_argument("--patience", type=int, default=10, help="stop after these many bad epochs")
 
     # Files
     files = parser.add_argument_group('Filesystem')
@@ -509,7 +510,8 @@ def main(args):
         result = validate_unofficial(args, dev_loader, model, stats, mode='dev')
         print(result[args.valid_metric])
         exit(0)
-
+    
+    bad_counter = 0
     for epoch in range(start_epoch, args.num_epochs):
         stats['epoch'] = epoch
 
@@ -528,12 +530,18 @@ def main(args):
                                        dev_offsets, dev_texts, dev_answers)
 
         # Save best valid
-        if result[args.valid_metric] > stats['best_valid']:
+        if result[args.valid_metric] >= stats['best_valid']:
             logger.info('Best valid: %s = %.2f (epoch %d, %d updates)' %
                         (args.valid_metric, result[args.valid_metric],
                          stats['epoch'], model.updates))
             model.save(args.model_file)
             stats['best_valid'] = result[args.valid_metric]
+            bad_counter = 0
+        else:
+            bad_counter += 1
+        if bad_counter > args.patience:
+            logger.info("Early stopping at epoch %d with accuracy %.2f"% (epoch, stats["best_valid"]))
+            exit(0)
         if epoch % 5 == 0:
             model.save(args.model_file + ".dummy")
 

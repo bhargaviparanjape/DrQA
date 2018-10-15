@@ -1,5 +1,7 @@
 from allennlp.modules.elmo import Elmo, batch_to_ids
 import os,sys,argparse,numpy as np,pdb,json
+from os.path import realpath,dirname
+sys.path.append(dirname(dirname(dirname(realpath(__file__)))))
 from drqa.reader import utils, config
 from drqa import tokenizers
 from multiprocessing import Pool
@@ -59,45 +61,57 @@ def load_data(args, input_file):
 					output['answers'].append(qa['answers'])
 	return output
 
-def main():
-	data = load_data(args, args.input_file)
-
+def main():	
 	options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json"
 	weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
 
 	elmo = Elmo(options_file, weight_file, num_output_representations=1, dropout=0)
 
-
-	ID_FILE = open(args.output_file + ".json", "w+")
+	'''
 	QUESTION_FILE = open(args.output_file + "_questions.json", "w+")
 	PARAGRAPH_FILE = open(args.output_file + "_paragraphs.json", "w+")
-	SENTENCES_FILE = open(args.output_file + "_sentences.json", "w+")
 
+	
+	data = load_data(args, args.input_file)
 	tokenizer_class = tokenizers.get_class(args.tokenizer)
 	make_pool = partial(Pool, args.workers, initializer=init)
-	workers = make_pool(initargs=(tokenizer_class, {'annotators': {'lemma'}, 'classpath' : "/home/bhargavi/robust_nlp/invariance/DrQA/data/corenlp/*"}))
-	# workers = make_pool(initargs=(tokenizer_class, {'annotators': {'lemma'}}))
+	# workers = make_pool(initargs=(tokenizer_class, {'annotators': {'lemma'}, 'classpath' : "/home/bhargavi/robust_nlp/invariance/DrQA/data/corenlp/*"}))
+	workers = make_pool(initargs=(tokenizer_class, {'annotators': {'lemma'}}))
 	q_tokens = workers.map(tokenize, data['questions'])
 	workers.close()
 	workers.join()
 
 	workers = make_pool(
-		initargs=(tokenizer_class, {'annotators': {'lemma', 'pos', 'ner'},'classpath' : "/home/bhargavi/robust_nlp/invariance/DrQA/data/corenlp/*"})
-		# initargs=(tokenizer_class, {'annotators': {'lemma', 'pos', 'ner'}})
+		# initargs=(tokenizer_class, {'annotators': {'lemma', 'pos', 'ner'},'classpath' : "/home/bhargavi/robust_nlp/invariance/DrQA/data/corenlp/*"})
+		initargs=(tokenizer_class, {'annotators': {'lemma', 'pos', 'ner'}})
 	)
 	c_tokens = workers.map(tokenize, data['contexts'])
 	workers.close()
 	workers.join()
 
+	for idx in range(len(data["qids"])):
+        ## add id information
+		q_tokens[idx]["id"] = data["qids"][idx]
+		QUESTION_FILE.write(json.dumps(q_tokens[idx]) + "\n")
+
+	for idx in range(len(data["contexts"])):
+		PARAGRAPH_FILE.write(json.dumps(c_tokens[idx]) + "\n")
+    
+	'''
+	q_tokens = [json.loads(q) for q in open(args.input_file + "_questions.json").readlines()]
+	c_tokens = [json.loads(d) for d in open(args.input_file + "_paragraphs.json").readlines()]
+	QUESTION_FILE = open(args.output_file + "_questions.elmo", "w+")
+	PARAGRAPH_FILE = open(args.output_file + "_paragraphs.elmo", "w+")
+
 	job_data = []
-	for idx in tqdm(range(len(data['qids']))):
+	for idx in range(len(q_tokens)):
 		question = q_tokens[idx]['words']
 		question_characters = batch_to_ids([question])
 		question_elmo = elmo(question_characters)["elmo_representations"][0]
 		# print question id and qidtocid for that question along with embedding information
-		dict_ = {"id" : data["qids"][idx], "vectors" : question_elmo.data.numpy().tolist()}
+		dict_ = {"id" : q_tokens[idx]['id'], "vectors" : question_elmo.data.numpy().tolist()}
 		QUESTION_FILE.write(json.dumps(dict_) + "\n")
-	for idx in tqdm(range(len(data["contexts"]))):
+	for idx in range(len(c_tokens)):
 		document = c_tokens[idx]['words']
 		context_sentence_boundaries = c_tokens[idx]['sentence_boundaries']
 		sentences = []
@@ -112,7 +126,7 @@ def main():
 		sentence_mask = sentences_representations["mask"]
 		dict_ = {"id": idx, "vectors": document_elmo.data.numpy().tolist(),
 				 "sentence_vectors" : [sentence_elmo.data.numpy().tolist(), sentence_mask.data.numpy().tolist()]}
-		QUESTION_FILE.write(json.dumps(dict_) + "\n")
+		PARAGRAPH_FILE.write(json.dumps(dict_) + "\n")
 		# write to file with id name, elmo of context and sentences
 
 
@@ -123,6 +137,6 @@ if __name__ == '__main__':
 	parser.add_argument('--workers', type=int, default=None)
 	parser.add_argument('--tokenizer', type=str, default='corenlp')
 	parser.add_argument("--truncate", action="store_true", default=False)
-
+	parser.add_argument("--elmo", action="store_true", default=False)
 	args = parser.parse_args()
 	main()

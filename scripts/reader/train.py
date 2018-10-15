@@ -69,7 +69,7 @@ def add_train_args(parser):
     runtime.add_argument('--test-batch-size', type=int, default=128,
                          help='Batch size during validation/testing')
     runtime.add_argument('--global_mode', type=str, default="train", help="global mode: {train, test}")
-
+    runtime.add_argument("--patience", type=int, default=10, help="how many bad iterations for early stopping")
 
     # Files
     files = parser.add_argument_group('Filesystem')
@@ -141,7 +141,6 @@ def set_defaults(args):
         args.embedding_file = os.path.join(args.embed_dir, args.embedding_file)
         if not os.path.isfile(args.embedding_file):
             raise IOError('No such file: %s' % args.embedding_file)
-
     # Set model directory
     subprocess.call(['mkdir', '-p', args.model_dir])
 
@@ -306,15 +305,15 @@ def validate_official(args, data_loader, model, global_stats,
         pred_s, pred_e, _ = model.predict(ex)
 
         for i in range(batch_size):
-            #if pred_s[i][0] >= len(offsets[ex_id[i]]) or pred_e[i][0] >= len(offsets[ex_id[i]]):
-            #    bad_examples += 1
-            #    continue
+            if pred_s[i][0] >= len(offsets[ex_id[i]]) or pred_e[i][0] >= len(offsets[ex_id[i]]):
+                bad_examples += 1
+                continue
             if args.use_sentence_selector:
                 s_offset = chosen_offset[i][pred_s[i][0]][0]
                 e_offset = chosen_offset[i][pred_e[i][0]][1]
             else:
                 s_offset = offsets[ex_id[i]][pred_s[i][0]][0]
-                e_offset = offsets[ex_id[i]][pred_e[i][0]][0]
+                e_offset = offsets[ex_id[i]][pred_e[i][0]][1]
             prediction = texts[ex_id[i]][s_offset:e_offset]
 
             # Compute metrics
@@ -400,23 +399,6 @@ def main(args):
 
 
     ## OFFSET comes from the gold sentence; the predicted sentence value shoule be maintained and sent to official validation set
-    if args.use_sentence_selector:
-        dev_offsets = {}
-        for ex in dev_exs:
-            if len(ex["gold_sentence_ids"]) == 0:
-                dev_offsets[ex['id']] = ex["offsets"]
-                continue
-            top_sentence = ex["gold_sentence_ids"][0]
-            sentence_boundaries = []
-            counter = 0
-            for sent in ex['sentences']:
-                sentence_boundaries.append([counter, counter + len(sent)])
-                counter += len(sent)
-            #offset_subset = ex["offsets"][sentence_boundaries[top_sentence][0]:sentence_boundaries[top_sentence][1]]
-            #initial_offset = offset_subset[0][0]
-            #new_offset = [[t[0] - initial_offset, t[1] - initial_offset] for t in offset_subset]
-            #dev_offsets[ex['id']] = new_offset
-
     # --------------------------------------------------------------------------
     # MODEL
     logger.info('-' * 100)
@@ -565,7 +547,8 @@ def main(args):
             print(sent_selector_results1["accuracy"])
         exit(0)
 
-
+    valid_history = []
+    bad_counter = 0 
     for epoch in range(start_epoch, args.num_epochs):
         stats['epoch'] = epoch
 
@@ -584,12 +567,18 @@ def main(args):
                                        dev_offsets, dev_texts, dev_answers)
 
         # Save best valid
-        if result[args.valid_metric] > stats['best_valid']:
+        if result[args.valid_metric] >= stats['best_valid']:
             logger.info('Best valid: %s = %.2f (epoch %d, %d updates)' %
                         (args.valid_metric, result[args.valid_metric],
                          stats['epoch'], model.updates))
             model.save(args.model_file)
             stats['best_valid'] = result[args.valid_metric]
+            bad_counter = 0
+        else:
+            bad_counter += 1
+        if bad_counter > args.patience:
+            logger.info("Early Stopping at epoch: %d" % epoch)
+            exit(0)
 
 
 if __name__ == '__main__':
