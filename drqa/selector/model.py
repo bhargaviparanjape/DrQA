@@ -56,7 +56,9 @@ class SentenceSelector(object):
                 self.network.load_state_dict(state_dict)
                 self.network.register_buffer('fixed_embedding', fixed_embedding)
             else:
-                self.network.load_state_dict(state_dict)
+                ## load only the layers that are common between the state dictionary
+
+                self.network.load_state_dict(state_dict, strict=False)
 
     def expand_dictionary(self, words):
         """Add words to the DocReader dictionary if they do not exist. The

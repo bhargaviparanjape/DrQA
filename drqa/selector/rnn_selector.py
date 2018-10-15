@@ -77,6 +77,8 @@ class RnnSentSelector(nn.Module):
         if args.question_merge == 'self_attn':
             self.self_attn = layers.LinearSeqAttn(question_hidden_size)
 
+        self.self_attn_document = layers.LinearSeqAttn(doc_hidden_size)
+
         # Bilinear attention for span start/end
         ## simple mlp to score these sentences
         self.sentence_scorer = layers.BilinearSeq(
@@ -149,7 +151,8 @@ class RnnSentSelector(nn.Module):
 
         # Add manual features
         if self.args.num_features > 0:
-            drnn_input.append(x1_f)
+            x1_f_flattened =  x1_f.view(x1_f.shape[0] * max_sent, -1, x1_f.shape[3])
+            drnn_input.append(x1_f_flattened)
 
         # Encode document with RNN
         doc_hiddens = self.doc_rnn(torch.cat(drnn_input, 2), x1_mask_flattened)
@@ -165,14 +168,15 @@ class RnnSentSelector(nn.Module):
 
 
         ### Simple document encoding ###
-        d_merge_weights = layers.uniform_weights(doc_hiddens, x1_mask_flattened)
+        # d_merge_weights = layers.uniform_weights(doc_hiddens, x1_mask_flattened)
+        d_merge_weights = self.self_attn_document(doc_hiddens, x1_mask_flattened)
         docs_hidden = layers.weighted_avg(doc_hiddens, d_merge_weights)
         relevance_scores = self.relevance_scorer1(docs_hidden, question_hidden).view(batch_size, max_sent, -1).squeeze(2)
 
 
         ### Fancy interaction between question and hidden layer ###
-        # Repeat question_hidden for sequence length of document
         '''
+        # Repeat question_hidden for sequence length of document
         question_hidden_expaned = question_hidden.unsqueeze(1).expand(question_hidden.shape[0], doc_hiddens.shape[1], question_hidden.shape[1]).contiguous()
         scores = self.sentence_scorer(doc_hiddens, question_hidden_expaned)
         # Max of the scores (needs to be masked)

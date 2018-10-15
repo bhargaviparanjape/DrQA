@@ -19,5 +19,6 @@ DATA_DIR = (
 
 from . import tokenizers
 from . import reader
+from . import selector
 from . import retriever
 from . import pipeline

@@ -28,9 +28,22 @@ def vectorize(ex, model, single_answer=False):
     max_length = max(sentence_lengths)
     sentences = torch.LongTensor([pad_single_seq([word_dict[w] for w in sent], max_length) for sent in ex['sentences']])
 
+    # Prepare other features also by sentence
+    sentence_boundaries = []
+    counter = 0
+    for sent in ex['sentences']:
+        sentence_boundaries.append([counter, counter + len(sent)])
+        counter += len(sent)
+    poses = [ex['pos'][sentence_boundaries[i][0]: sentence_boundaries[i][1]]
+             for i in range(len(ex["sentences"]))]
+    ners = [ex['ner'][sentence_boundaries[i][0]: sentence_boundaries[i][1]]
+             for i in range(len(ex["sentences"]))]
+    lemmas = [ex['lemma'][sentence_boundaries[i][0]: sentence_boundaries[i][1]]
+             for i in range(len(ex["sentences"]))]
+
     # Create extra features vector
     if len(feature_dict) > 0:
-        features = torch.zeros(len(ex['document']), len(feature_dict))
+        features = torch.zeros(len(ex['sentences']), max_length, len(feature_dict))
     else:
         features = None
 
@@ -39,34 +52,41 @@ def vectorize(ex, model, single_answer=False):
         q_words_cased = {w for w in ex['question']}
         q_words_uncased = {w.lower() for w in ex['question']}
         q_lemma = {w for w in ex['qlemma']} if args.use_lemma else None
-        for i in range(len(ex['document'])):
-            if ex['document'][i] in q_words_cased:
-                features[i][feature_dict['in_question']] = 1.0
-            if ex['document'][i].lower() in q_words_uncased:
-                features[i][feature_dict['in_question_uncased']] = 1.0
-            if q_lemma and ex['lemma'][i] in q_lemma:
-                features[i][feature_dict['in_question_lemma']] = 1.0
+        ## All sent will have equal length as they are padded
+        for j, sent in enumerate(ex["sentences"]):
+            for i in range(len(sent)):
+                if sent[i] in q_words_cased:
+                    features[j][i][feature_dict['in_question']] = 1.0
+                if ex['document'][i].lower() in q_words_uncased:
+                    features[j][i][feature_dict['in_question_uncased']] = 1.0
+                if q_lemma and lemmas[j][i] in q_lemma:
+                    features[j][i][feature_dict['in_question_lemma']] = 1.0
 
     # f_{token} (POS)
     if args.use_pos:
-        for i, w in enumerate(ex['pos']):
-            f = 'pos=%s' % w
-            if f in feature_dict:
-                features[i][feature_dict[f]] = 1.0
+        for j, pos in enumerate(poses):
+            for i, w in enumerate(pos):
+                f = 'pos=%s' % w
+                # pos=UNK not in any of the POS features, will return 0
+                if f in feature_dict:
+                    features[j][i][feature_dict[f]] = 1.0
 
     # f_{token} (NER)
     if args.use_ner:
-        for i, w in enumerate(ex['ner']):
-            f = 'ner=%s' % w
-            if f in feature_dict:
-                features[i][feature_dict[f]] = 1.0
+        for j, ner in enumerate(ners):
+            for i, w in enumerate(ner):
+                f = 'ner=%s' % w
+                if f in feature_dict:
+                    features[j][i][feature_dict[f]] = 1.0
 
     # f_{token} (TF)
     if args.use_tf:
-        counter = Counter([w.lower() for w in ex['document']])
-        l = len(ex['document'])
-        for i, w in enumerate(ex['document']):
-            features[i][feature_dict['tf']] = counter[w.lower()] * 1.0 / l
+        for j, sent in enumerate(ex["sentences"]):
+            counter = Counter([w.lower() for w in sent])
+            ## Original length of sentence
+            l = len(sent)
+            for i, w in enumerate(sent):
+                features[j][i][feature_dict['tf']] = counter[w.lower()] * 1.0 / l
 
     # Maybe return without target
     if 'answers' not in ex:
@@ -165,7 +185,7 @@ def batchify(batch):
     if features[0] is None:
         x1_f = None
     else:
-        x1_f = torch.zeros(len(docs), max_length, features[0].size(1))
+        x1_f = torch.zeros(len(docs), max_sentences, max_length, features[0].size(2))
     for i, d in enumerate(docs):
         x1[i, :d.size(0), :d.size(1)].copy_(d)
         for j, l in enumerate(doc_lengths[i]):
@@ -179,7 +199,7 @@ def batchify(batch):
         ## add UNK to the empty dialogues
         if x1_f is not None:
             ## not handled
-            x1_f[i, :d.size(0)].copy_(features[i])
+            x1_f[i, :d.size(0), :d.size(1), :].copy_(features[i])
 
     # Batch questions
     max_length = max([q.size(0) for q in questions])
