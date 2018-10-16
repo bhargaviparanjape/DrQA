@@ -9,7 +9,7 @@
 from collections import Counter
 import torch
 from ..selector.vector import vectorize as sent_selector_vectorize
-from ..selector.vector import batchify_sentences as sent_selector_batchify
+from ..selector.vector import batchify as sent_selector_batchify
 import numpy as np
 import pdb
 
@@ -48,6 +48,8 @@ def vectorize(ex, model, single_answer=False):
         else:
             ex_batch = sent_selector_batchify([sent_selector_vectorize(ex, model.sentence_selector, single_answer)])
             top_sentence = model.sentence_selector.predict(ex_batch)[0][0]
+            # if args.dynamic_selector:
+            #     top_sentences = model.sentence_selector.predict(ex_batch, top_n = 5)
             #if len(ex['gold_sentence_ids']) > 0 and top_sentence not in ex['gold_sentence_ids']:
             #    return []
         # Extract top sentence and change ex["document"] accordingly

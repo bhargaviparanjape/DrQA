@@ -92,6 +92,12 @@ def add_train_args(parser):
     files.add_argument('--embedding-file', type=str,
                        default='glove.6B.300d.txt',
                        help='Space-separated pretrained embeddings file')
+    files.add_argument('--adv-dev-file', type=str,
+                       action="append",
+                       help='Preprocessed dev file')
+    files.add_argument('--adv-dev-json', type=str, action="append",
+                       help=('Unprocessed dev file to run validation '
+                             'while training on'))
 
     # Saving + loading
     save_load = parser.add_argument_group('Saving/Loading')
@@ -137,6 +143,21 @@ def set_defaults(args):
     args.dev_file = os.path.join(args.data_dir, args.dev_file)
     if not os.path.isfile(args.dev_file):
         raise IOError('No such file: %s' % args.dev_file)
+
+    # Adversarial files
+
+    if args.adv_dev_file is not None and args.adv_dev_json is not None:
+        adv_dev_files = []
+        for t_file in args.adv_dev_file:
+            fullpath = os.path.join(args.data_dir, t_file)
+            adv_dev_files.append(fullpath)
+        vars(args)["adv_dev_file"] = adv_dev_files
+        adv_dev_json = []
+        for t_file in args.adv_dev_json:
+            fullpath = os.path.join(args.data_dir, t_file)
+            adv_dev_json.append(fullpath)
+        vars(args)["adv_dev_json"] = adv_dev_json
+
     if args.embedding_file:
         args.embedding_file = os.path.join(args.embed_dir, args.embedding_file)
         if not os.path.isfile(args.embedding_file):
@@ -375,6 +396,125 @@ def eval_accuracies(pred_s, target_s, pred_e, target_e):
 # ------------------------------------------------------------------------------
 
 
+def validate_adversarial(args, model, global_stats, mode="dev"):
+    # create dataloader for dev sets, load thier jsons, integrate the function
+
+
+    for idx, dataset_file in enumerate(args.adv_dev_json):
+
+        predictions = {}
+
+        logger.info("Validating Adversarial Dataset %s" % dataset_file)
+        exs = utils.load_data(args, args.adv_dev_file[idx])
+        logger.info('Num dev examples = %d' % len(exs))
+        ## Create dataloader
+        dev_dataset = reader_data.ReaderDataset(exs, model, single_answer=False)
+        if args.sort_by_len:
+            dev_sampler = reader_data.SortedBatchSampler(dev_dataset.lengths(),
+                                                  args.test_batch_size,
+                                                  shuffle=False)
+        else:
+            dev_sampler = torch.utils.data.sampler.SequentialSampler(dev_dataset)
+        dev_loader = torch.utils.data.DataLoader(
+            dev_dataset,
+            batch_size=args.test_batch_size,
+            sampler=dev_sampler,
+            num_workers=args.data_workers,
+            collate_fn=reader_vector.batchify,
+            pin_memory=args.cuda,
+        )
+
+        texts = utils.load_text(dataset_file)
+        offsets = {ex['id']: ex['offsets'] for ex in exs}
+        answers = utils.load_answers(dataset_file)
+
+        eval_time = utils.Timer()
+        f1 = utils.AverageMeter()
+        exact_match = utils.AverageMeter()
+
+        examples = 0
+        bad_examples = 0
+        for ex in dev_loader:
+            ex_id, batch_size = ex[-1], ex[0].size(0)
+            chosen_offset = ex[-2]
+            pred_s, pred_e, _ = model.predict(ex)
+
+            for i in range(batch_size):
+                if pred_s[i][0] >= len(offsets[ex_id[i]]) or pred_e[i][0] >= len(offsets[ex_id[i]]):
+                    bad_examples += 1
+                    continue
+                if args.use_sentence_selector:
+                    s_offset = chosen_offset[i][pred_s[i][0]][0]
+                    e_offset = chosen_offset[i][pred_e[i][0]][1]
+                else:
+                    s_offset = offsets[ex_id[i]][pred_s[i][0]][0]
+                    e_offset = offsets[ex_id[i]][pred_e[i][0]][1]
+                prediction = texts[ex_id[i]][s_offset:e_offset]
+
+                predictions[ex_id[i]] = prediction
+
+                ground_truths = answers[ex_id[i]]
+                exact_match.update(utils.metric_max_over_ground_truths(
+                    utils.exact_match_score, prediction, ground_truths))
+                f1.update(utils.metric_max_over_ground_truths(
+                    utils.f1_score, prediction, ground_truths))
+
+            examples += batch_size
+
+        logger.info('dev valid official for dev file %s : Epoch = %d | EM = %.2f | ' %
+                    (dataset_file, global_stats['epoch'], exact_match.avg * 100) +
+                    'F1 = %.2f | examples = %d | valid time = %.2f (s)' %
+                    (f1.avg * 100, examples, eval_time.time()))
+
+        orig_f1_score = 0.0
+        orig_exact_match_score = 0.0
+        adv_f1_scores = {}  # Map from original ID to F1 score
+        adv_exact_match_scores = {}  # Map from original ID to exact match score
+        adv_ids = {}
+        all_ids = set()  # Set of all original IDs
+        f1 = exact_match = 0
+        dataset = json.load(open(dataset_file))['data']
+        for article in dataset:
+            for paragraph in article['paragraphs']:
+                for qa in paragraph['qas']:
+                    orig_id = qa['id'].split('-')[0]
+                    all_ids.add(orig_id)
+                    if qa['id'] not in predictions:
+                        message = 'Unanswered question ' + qa['id'] + ' will receive score 0.'
+                        # logger.info(message)
+                        continue
+                    ground_truths = list(map(lambda x: x['text'], qa['answers']))
+                    prediction = predictions[qa['id']]
+                    cur_exact_match = utils.metric_max_over_ground_truths(utils.exact_match_score,
+                                                                    prediction, ground_truths)
+                    cur_f1 = utils.metric_max_over_ground_truths(utils.f1_score, prediction, ground_truths)
+                    if orig_id == qa['id']:
+                        # This is an original example
+                        orig_f1_score += cur_f1
+                        orig_exact_match_score += cur_exact_match
+                        if orig_id not in adv_f1_scores:
+                            # Haven't seen adversarial example yet, so use original for adversary
+                            adv_ids[orig_id] = orig_id
+                            adv_f1_scores[orig_id] = cur_f1
+                            adv_exact_match_scores[orig_id] = cur_exact_match
+                    else:
+                        # This is an adversarial example
+                        if (orig_id not in adv_f1_scores or adv_ids[orig_id] == orig_id
+                            or adv_f1_scores[orig_id] > cur_f1):
+                            # Always override if currently adversary currently using orig_id
+                            adv_ids[orig_id] = qa['id']
+                            adv_f1_scores[orig_id] = cur_f1
+                            adv_exact_match_scores[orig_id] = cur_exact_match
+        orig_f1 = 100.0 * orig_f1_score / len(all_ids)
+        orig_exact_match = 100.0 * orig_exact_match_score / len(all_ids)
+        adv_exact_match = 100.0 * sum(adv_exact_match_scores.values()) / len(all_ids)
+        adv_f1 = 100.0 * sum(adv_f1_scores.values()) / len(all_ids)
+        logger.info("For the file %s Original Exact Match : %.4f ; Original F1 : : %.4f | "
+                    % (dataset_file, orig_exact_match, orig_f1)
+                    + "Adversarial Exact Match : %.4f ; Adversarial F1 : : %.4f " % (adv_exact_match, adv_f1))
+
+
+
 def main(args):
     
     # --------------------------------------------------------------------------
@@ -539,13 +679,14 @@ def main(args):
         print(result1["exact_match"])
         if args.use_sentence_selector:
             sent_stats = {'timer': utils.Timer(), 'epoch': 0, 'best_valid': 0}
-            sent_selector_results = validate_selector(model.sentence_selector.args, dev_loader1, model.sentence_selector, sent_stats, mode="dev")
-            # sent_selector_results1 = validate_selector(selector.args, dev_loader1, selector, sent_stats, mode="dev")
+            sent_selector_results = validate_selector(model.sentence_selector.args, dev_loader, model.sentence_selector, sent_stats, mode="dev")
             print("Sentence Selector model acheives:")
             print(sent_selector_results["accuracy"])
-            # print("Sentence Selector 1 gets:")
-            # print(sent_selector_results1["accuracy"])
+
+        validate_adversarial(args, model, stats, mode="dev")
         exit(0)
+
+
 
     valid_history = []
     bad_counter = 0 

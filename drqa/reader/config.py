@@ -52,7 +52,8 @@ def add_model_args(parser):
     model.add_argument("--use_sentence_selector", action="store_true", default=False)
     model.add_argument("--use_gold_sentence", action="store_true", default=False)
     model.add_argument("--sentence_selector_model", type=str, default=None)
-    model.add_argument("--selection_threshold", type=float, default=0.9)
+    model.add_argument("--selection_threshold", type=float, default=0.95)
+    model.add_argument("--dynamic_selector", action="store_true", default=False)
     #####################################################################
 
     # Model specific details

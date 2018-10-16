@@ -88,12 +88,6 @@ def add_train_args(parser):
     files.add_argument('--embedding-file', type=str,
                        default='glove.6B.300d.txt',
                        help='Space-separated pretrained embeddings file')
-    files.add_argument('--adv-dev-file', type=str,
-                       action="append",
-                       help='Preprocessed dev file')
-    files.add_argument('--adv-dev-json', type=str, action="append",
-                       help=('Unprocessed dev file to run validation '
-                             'while training on'))
 
     # Saving + loading
     save_load = parser.add_argument_group('Saving/Loading')
@@ -143,18 +137,6 @@ def set_defaults(args):
         args.embedding_file = os.path.join(args.embed_dir, args.embedding_file)
         if not os.path.isfile(args.embedding_file):
             raise IOError('No such file: %s' % args.embedding_file)
-
-    # Adversarial files
-    adv_dev_files = []
-    for t_file in args.adv_dev_file:
-        fullpath = os.path.join(args.data_dir, t_file)
-        adv_dev_files.append(fullpath)
-    vars(args)["adv_dev_file"] = adv_dev_files
-    adv_dev_json = []
-    for t_file in args.adv_dev_file:
-        fullpath = os.path.join(args.data_dir, t_file)
-        adv_dev_json.append(fullpath)
-    vars(args)["adv_dev_json"] = adv_dev_json
 
     # Set model directory
     subprocess.call(['mkdir', '-p', args.model_dir])
@@ -349,18 +331,6 @@ def validate_official(args, data_loader, model, global_stats,
                 (f1.avg * 100, examples, eval_time.time()))
 
     return {'exact_match': exact_match.avg * 100, 'f1': f1.avg * 100}
-
-
-def validate_adversarial(args, data_loader, model, global_stats):
-    # create dataloader for dev sets, load thier jsons, integrate the function
-    for idx, dataset_file in enumerate(args.adv_dev_json):
-        logger.info("Validating Adversarial Dataset %s" % dataset_file)
-        exs = utils.load(args, args.adv_dev_file[idx])
-        logger.info('Num dev examples = %d' % len(exs))
-        if args.official_eval:
-            texts = utils.load_text(dataset_file)
-            offsets = {ex['id']: ex['offsets'] for ex in exs}
-            answers = utils.load_answers(dataset_file)
 
 
 def eval_accuracies(pred, target, mode="dev"):
