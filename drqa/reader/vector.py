@@ -47,37 +47,47 @@ def vectorize(ex, model, single_answer=False):
             top_sentence = ex['gold_sentence_ids'][0]
         else:
             ex_batch = sent_selector_batchify([sent_selector_vectorize(ex, model.sentence_selector, single_answer)])
-            top_sentence = model.sentence_selector.predict(ex_batch)[0][0]
-            # if args.dynamic_selector:
-            #     top_sentences = model.sentence_selector.predict(ex_batch, top_n = 5)
+
+            if args.dynamic_selector:
+                top_sentence = model.sentence_selector.predict(ex_batch, use_threshold = args.selection_threshold)[0]
+            else:
+                top_sentence = model.sentence_selector.predict(ex_batch)[0]
             #if len(ex['gold_sentence_ids']) > 0 and top_sentence not in ex['gold_sentence_ids']:
             #    return []
         # Extract top sentence and change ex["document"] accordingly
-        document = torch.LongTensor([word_dict[w] for w in ex['sentences'][top_sentence]])
-        ex['document'] = ex['sentences'][top_sentence]
-        window = sentence_boundaries[top_sentence]
-        # assert lengths of all three are not the same
+        tokens = []
+        pos = []
+        ner = []
+        lemma = []
+        offset_subset = []
         assert len(ex['pos']) == len(ex['ner']) == len(ex['lemma'])
-        ex['pos'] = ex['pos'][window[0]:window[1]]
-        ex['ner'] = ex['ner'][window[0]:window[1]]
-        ex['lemma'] = ex['lemma'][window[0]:window[1]]
-        offset_subset = ex["offsets"][sentence_boundaries[top_sentence][0]:sentence_boundaries[top_sentence][1]]
-        # initial_offset = offset_subset[0][0]
-        # new_offset_subset = [[t[0] - initial_offset, t[1] - initial_offset] for t in offset_subset]
+        for t in top_sentence:
+            tokens += ex['sentences'][t]
+            window = sentence_boundaries[t]
+            pos += ex['pos'][window[0]:window[1]]
+            ner += ex['ner'][window[0]:window[1]]
+            lemma += ex['lemma'][window[0]:window[1]]
+            offset_subset += ex["offsets"][sentence_boundaries[t][0]:sentence_boundaries[t][1]]
 
+        document = torch.LongTensor([word_dict[w] for w in tokens])
+        ex['document'] = tokens
+        ex['pos'] = pos
+        ex['ner'] = ner
+        ex['lemma'] = lemma
         selected_offset = offset_subset
 
         # Check if selected sentence contains any answer span
         # account for answers being in between the gold sentence
 
         flag = True
+        window = sentence_boundaries[top_sentence[0]]
         for answer in ex['answers']:
             if answer[0] >= window[0] and answer[1] < window[1]:
                 new_start = answer[0] - window[0]
                 new_end = answer[1] - window[0]
                 flag = False
                 break
-            elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top_sentence + 1][1]:
+            elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top_sentence[0] + 1][1]:
                 new_start = answer[0] - window[0]
                 new_end = window[1] - window[0] - 1
                 flag = False

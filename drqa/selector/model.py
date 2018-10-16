@@ -281,7 +281,7 @@ class SentenceSelector(object):
     # Prediction
     # --------------------------------------------------------------------------
 
-    def predict(self, ex, candidates=None, top_n=1, async_pool=None):
+    def predict(self, ex, candidates=None, use_threshold = None, top_n=1, async_pool=None):
         """Forward a batch of examples only to get predictions.
 
         Args:
@@ -330,12 +330,35 @@ class SentenceSelector(object):
                 return async_pool.apply_async(self.decode_candidates, args)
             else:
                 return self.decode_candidates(*args)
+        elif use_threshold:
+            args = (score_g, use_threshold, self.args.max_len)
+            if async_pool:
+                return async_pool.apply_async(self.decode_threshold, args)
+            else:
+                return self.decode_threshold(*args)
         else:
             args = (score_g, top_n, self.args.max_len)
             if async_pool:
                 return async_pool.apply_async(self.decode, args)
             else:
                 return self.decode(*args)
+
+    @staticmethod
+    def decode_threshold(score_g, threshold, max_len=None):
+        pred = []
+        for i in range(score_g.size(0)):
+            normalized_scores = F.softmax(score_g[i])
+            scores = normalized_scores.numpy()
+            scores_flat = scores.flatten()
+            idx_selected = np.where(scores_flat >= (1-threshold))
+            idx_selected = idx_selected[0].tolist()
+            if len(idx_selected) == 0:
+                idx_selected = [np.argmax(scores_flat)]
+            # pred_idx = np.unravel_index(idx_sort, scores.shape)
+            pred.append(idx_selected)
+            # pred_e.append(e_idx)
+            # pred_score.append(scores_flat[idx_sort])
+        return pred
 
     @staticmethod
     def decode(score_g, top_n=1, max_len=None):
