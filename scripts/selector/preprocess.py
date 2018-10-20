@@ -60,8 +60,8 @@ def load_dataset(path):
     for idx, article in enumerate(data):
         if idx > 2 and args.truncate:
             break
-        for i, paragraph in enumerate(article['paragraphs']):
-            if i > 10:
+        for i, paragraph in enumerate(article['paragraphs']) and args.truncate:
+            if i > 5:
                 break
             output['contexts'].append(paragraph['context'])
             for qa in paragraph['qas']:
