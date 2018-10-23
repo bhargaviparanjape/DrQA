@@ -13,8 +13,8 @@ import random
 import re
 from termcolor import colored
 import sys
-import spacy
 import numpy
+import pdb
 
 OPTS = None
 
@@ -73,7 +73,7 @@ def parse_args():
 											action='store_true',help='Use the modified answers')
 	parser.add_argument('--prepend', '-p', default=False,
 											action='store_true',help='Prepend sentences.')
-	parser.add_argument('--random', '-r', default=False, help="Add adversarial example anywhere in the output",
+	parser.add_argument('--random', default=False, help="Add adversarial example anywhere in the output",
 											action="store_true")
 	parser.add_argument('--quiet', '-q', default=False, action='store_true')
 	if len(sys.argv) == 1:
@@ -1151,6 +1151,8 @@ def run_end2end(qas, alteration_strategy=None):
 
 def find_answer(offsets, begin_offset, end_offset):
 	"""Match token offsets with the char begin/end offsets of the answer."""
+	if offsets == None:
+		pdb.set_trace()
 	start = [i for i, tok in enumerate(offsets) if tok[0] == begin_offset]
 	end = [i for i, tok in enumerate(offsets) if tok[1] == end_offset]
 	assert(len(start) <= 1)
@@ -1166,107 +1168,129 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 	out_obj = {'version': dataset['version'], 'data': out_data}
 	mturk_data = []
 
-	server = corenlp.CoreNLPServer(port=CORENLP_PORT, logfile=CORENLP_LOG)
-	client = corenlp.CoreNLPClient(port=CORENLP_PORT)
-	for article in dataset['data']:
-		out_paragraphs = []
-		out_article = {'title': article['title'], 'paragraphs': out_paragraphs}
-		out_data.append(out_article)
-		for paragraph in article['paragraphs']:
-			out_paragraphs.append(paragraph)
-			for qa in paragraph['qas']:
-				question = qa['question'].strip()
-				if not OPTS.quiet:
-					print('Question: %s' % question).encode('utf-8')
-				if use_answer_placeholder:
-					answer = 'ANSWER'
-					determiner = ''
-				else:
-					p_parse = corenlp_cache[paragraph['context']]
-					ind, a_toks = get_tokens_for_answers(qa['answers'], p_parse)
-					determiner = get_determiner_for_answers(qa['answers'])
-					answer_obj = qa['answers'][ind]
-					for rule_name, func in ANSWER_RULES:
-						answer = func(answer_obj, a_toks, question, determiner=determiner)
-						if answer: break
+	with corenlp.CoreNLPServer(port=CORENLP_PORT, logfile=CORENLP_LOG) as server:
+		client = corenlp.CoreNLPClient(port=CORENLP_PORT)
+		for article in dataset['data']:
+			out_paragraphs = []
+			out_article = {'title': article['title'], 'paragraphs': out_paragraphs}
+			out_data.append(out_article)
+			for paragraph in article['paragraphs']:
+				out_paragraphs.append(paragraph)
+				for qa in paragraph['qas']:
+					question = qa['question'].strip()
+					if not OPTS.quiet:
+						print('Question: %s' % question).encode('utf-8')
+					if use_answer_placeholder:
+						answer = 'ANSWER'
+						determiner = ''
 					else:
-						raise ValueError('Missing answer')
-				answer_mturk = "<span class='answer'>%s</span>" % answer
-				q_parse = corenlp_cache[question]
-				q_tokens = q_parse['tokens']
-				q_const_parse = read_const_parse(q_parse['parse'])
-				if alteration_strategy:
-					# Easiest to alter the question before converting
-					q_list = alter_question(
-						question, q_tokens, q_const_parse, nearby_word_dict,
-						postag_dict, strategy=alteration_strategy)
-				else:
-					q_list = [(question, q_tokens, q_const_parse, 'unaltered')]
-				for q_str, q_tokens, q_const_parse, tag in q_list:
-					for rule in CONVERSION_RULES:
-						sent = rule.convert(q_str, answer, q_tokens, q_const_parse)
-						if sent:
-							if not OPTS.quiet:
-								print('  Sent (%s): %s' % (tag, colored(sent, 'cyan'))).encode('utf-8')
-							cur_qa = {
-								'question': qa['question'],
-								'id': '%s-%s' % (qa['id'], tag),
-								'answers': qa['answers']
-							}
-							if OPTS.prepend:
-								cur_text = '%s %s' % (sent, paragraph['context'])
-								new_answers = []
-								for a in qa['answers']:
-									new_answers.append({
-										'text': a['text'],
-										'answer_start': a['answer_start'] + len(sent) + 1
-									})
-								cur_qa['answers'] = new_answers
-							elif OPTS.random:
-								sentences = corenlp_cache[paragraph['context']]["sentences"]
-								sentence_boundaries = []
-								count = 0
-								for s in sentences:
-									sentence_boundaries.append(count)
-									count += len(s['tokens'])
-								tokens = [t for s in sentences for t in s['tokens']]
-								offsets = [(token['characterOffsetBegin'],
-                 							token['characterOffsetEnd']) for token in tokens]
-								# Usually these token offsets are marked perfectly
-								sentence_lengths = [len(" ".join(s)) for s in sentences]
-								# Pick a random position to insert the sentence
-								insert_position = numpy.random.randint(len(sentences) + 1)
-								added_tokens = [token for s in client.query_ner(sent)["sentences"] for token in s]
-								added_offsets = [(token['characterOffsetBegin'],
-                 							token['characterOffsetEnd']) for token in added_tokens]
-								# Locate gold sentence
-								if insert_position == len(sentences):
-									change_offset = 0
-									next_token = len(tokens)
-								else:
-									change_offset = added_offsets[-1][1] - added_offsets[-1][0]
-									next_token = sentence_boundaries[insert_position - 1]
-								new_answers = []
-								for ans in qa['answers']:
-									start_token, end_token = find_answer(offsets,ans['answer_start'], ans['answer_start'] + len(ans['text']))
-									if start_token >= next_token:
+						p_parse = corenlp_cache[paragraph['context']]
+						ind, a_toks = get_tokens_for_answers(qa['answers'], p_parse)
+						determiner = get_determiner_for_answers(qa['answers'])
+						answer_obj = qa['answers'][ind]
+						for rule_name, func in ANSWER_RULES:
+							answer = func(answer_obj, a_toks, question, determiner=determiner)
+							if answer: break
+						else:
+							raise ValueError('Missing answer')
+					answer_mturk = "<span class='answer'>%s</span>" % answer
+					q_parse = corenlp_cache[question]
+					q_tokens = q_parse['tokens']
+					q_const_parse = read_const_parse(q_parse['parse'])
+					if alteration_strategy:
+						# Easiest to alter the question before converting
+						q_list = alter_question(
+							question, q_tokens, q_const_parse, nearby_word_dict,
+							postag_dict, strategy=alteration_strategy)
+					else:
+						q_list = [(question, q_tokens, q_const_parse, 'unaltered')]
+					for q_str, q_tokens, q_const_parse, tag in q_list:
+						for rule in CONVERSION_RULES:
+							sent = rule.convert(q_str, answer, q_tokens, q_const_parse)
+							if sent:
+								if not OPTS.quiet:
+									print('  Sent (%s): %s' % (tag, colored(sent, 'cyan'))).encode('utf-8')
+								cur_qa = {
+									'question': qa['question'],
+									'id': '%s-%s' % (qa['id'], tag),
+									'answers': qa['answers']
+								}
+								if OPTS.prepend:
+									cur_text = '%s %s' % (sent, paragraph['context'])
+									new_answers = []
+									for a in qa['answers']:
 										new_answers.append({
 											'text': a['text'],
-											'answer_start': a['answer_start'] + change_offset
+											'answer_start': a['answer_start'] + len(sent) + 1
 										})
-								# Add the sentence in that location and return the text
-								new_sentences = sentences[:insert_position] + [added_tokens] + sentences[insert_position:]
-								cur_text = " ".join([token['word'] for s in new_sentences for token in s])
-								cur_qa['answers'] = new_answers
-								# TODO: Handle, will not work when sentence splitting of the resultant text doesnt match at test
-								# Sanity check code to make sure processing the changed text still gets the correct answer
-							else:
-								cur_text = '%s %s' % (paragraph['context'], sent)
-			cur_paragraph = {'context': cur_text, 'qas': [cur_qa]}
-			out_paragraphs.append(cur_paragraph)
-			sent_mturk = rule.convert(q_str, answer_mturk, q_tokens, q_const_parse)
-			mturk_data.append((qa['id'], sent_mturk))
-			break
+									cur_qa['answers'] = new_answers
+								elif OPTS.random:
+									sentences = corenlp_cache[paragraph['context']]["sentences"]
+									sentence_boundaries = []
+									count = 0
+									for s in sentences:
+										sentence_boundaries.append(count)
+										count += len(s['tokens'])
+									tokens = [t for s in sentences for t in s['tokens']]
+									offsets = [(token['characterOffsetBegin'],
+												token['characterOffsetEnd']) for token in tokens]
+									# Usually these token offsets are marked perfectly
+									sentence_lengths = [len(" ".join(s)) for s in sentences]
+									# Pick a random position to insert the sentence
+									insert_position = numpy.random.randint(len(sentences) + 1)
+									added_tokens = [token for s in client.query_ner(sent)["sentences"] for token in s['tokens']]
+									added_offsets = [(token['characterOffsetBegin'],
+												token['characterOffsetEnd']) for token in added_tokens]
+									# Locate gold sentence
+									if insert_position == len(sentences):
+										change_offset = 0
+										next_token = len(tokens)
+										offset_shift_added = 1
+										offser_shift_rest = 0
+									else:
+										change_offset = added_offsets[-1][1] - added_offsets[0][0]
+										next_token = sentence_boundaries[insert_position]
+										offset_shift_added = offsets[next_token][0]
+										offser_shift_rest = added_offsets[-1][1] + 1
+
+									new_answers = []
+									new_tokens = tokens[:next_token] + added_tokens + tokens[next_token:]
+									new_offsets = offsets[:next_token] + [(a[0]+offset_shift_added, a[1] + offset_shift_added) for a in added_offsets] + \
+									[(a[0] + offser_shift_rest, a[1] + offser_shift_rest) for a in offsets[next_token:]]
+									for ans in qa['answers']:
+										if ans == None:
+											new_answers.append(ans)
+											continue
+										found = find_answer(offsets,ans['answer_start'], ans['answer_start'] + len(ans['text']))
+										if found is not None:
+											start_token, end_token = found
+											if start_token >= next_token:
+												new_answers.append({
+													'text': ans['text'],
+													'answer_start': ans['answer_start'] + change_offset + 1
+												})
+												new_start_token, new_end_token = find_answer(new_offsets, new_answers[-1]['answer_start'], new_answers[-1]['answer_start'] + len(ans['text']))
+												assert [t['word'] for t in tokens[start_token:end_token]] == [t['word'] for t in new_tokens[new_start_token:new_end_token]]
+											else:
+												new_answers.append(ans)
+										else:
+											new_answers.append(ans)
+									# Add the sentence in that location and return the text
+									cur_text = " ".join([token['word'] for token in new_tokens])
+									# verify again on final splitting
+									runtime_tokens = [token for s in client.query_ner(cur_text)["sentences"] for token in s['tokens']]
+									runtime_offsets = [(token['characterOffsetBegin'], token['characterOffsetEnd']) for token in runtime_tokens]
+									#assert new_offsets == runtime_offsets
+									cur_qa['answers'] = new_answers
+									# TODO: Handle, will not work when sentence splitting of the resultant text doesnt match at test
+									# Sanity check code to make sure processing the changed text still gets the correct answer
+								else:
+									cur_text = '%s %s' % (paragraph['context'], sent)
+								cur_paragraph = {'context': cur_text, 'qas': [cur_qa]}
+								out_paragraphs.append(cur_paragraph)
+								sent_mturk = rule.convert(q_str, answer_mturk, q_tokens, q_const_parse)
+								mturk_data.append((qa['id'], sent_mturk))
+								break
 
 
 
