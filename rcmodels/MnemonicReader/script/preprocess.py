@@ -6,28 +6,32 @@
 # LICENSE file in the root directory of this source tree.
 """Preprocess the SQuAD dataset for training."""
 
+import sys
+sys.path.append('.')
 import argparse
 import os
-import sys
-import json
+try:
+    import ujson as json
+except ImportError:
+    import json
 import time
-from os.path import dirname,realpath
-sys.path.append(dirname(dirname(dirname(realpath(__file__)))))
-from multiprocessing import Pool
+
+from multiprocessing import Pool, cpu_count
 from multiprocessing.util import Finalize
 from functools import partial
-from drqa import tokenizers
+from spacy_tokenizer import SpacyTokenizer
 
 # ------------------------------------------------------------------------------
 # Tokenize + annotate.
 # ------------------------------------------------------------------------------
 
 TOK = None
+ANNTOTORS = {'lemma', 'pos', 'ner'}
 
 
-def init(tokenizer_class, options):
+def init():
     global TOK
-    TOK = tokenizer_class(**options)
+    TOK = SpacyTokenizer(annotators=ANNTOTORS)
     Finalize(TOK, TOK.shutdown, exitpriority=100)
 
 
@@ -37,6 +41,7 @@ def tokenize(text):
     tokens = TOK.tokenize(text)
     output = {
         'words': tokens.words(),
+        'chars': tokens.chars(),
         'offsets': tokens.offsets(),
         'pos': tokens.pos(),
         'lemma': tokens.lemmas(),
@@ -80,28 +85,32 @@ def find_answer(offsets, begin_offset, end_offset):
 
 def process_dataset(data, tokenizer, workers=None):
     """Iterate processing (tokenize, parse, etc) dataset multithreaded."""
-    tokenizer_class = tokenizers.get_class(tokenizer)
     make_pool = partial(Pool, workers, initializer=init)
-    workers = make_pool(initargs=(tokenizer_class, {'annotators': {'lemma'}}))
+
+    workers = make_pool(initargs=())
     q_tokens = workers.map(tokenize, data['questions'])
     workers.close()
     workers.join()
 
-    workers = make_pool(
-        initargs=(tokenizer_class, {'annotators': {'lemma', 'pos', 'ner'}})
-    )
+    workers = make_pool(initargs=())
     c_tokens = workers.map(tokenize, data['contexts'])
     workers.close()
     workers.join()
 
     for idx in range(len(data['qids'])):
         question = q_tokens[idx]['words']
+        question_char = q_tokens[idx]['chars']
         qlemma = q_tokens[idx]['lemma']
+        qpos = q_tokens[idx]['pos']
+        qner = q_tokens[idx]['ner']
+
         document = c_tokens[data['qid2cid'][idx]]['words']
+        document_char = c_tokens[data['qid2cid'][idx]]['chars']
         offsets = c_tokens[data['qid2cid'][idx]]['offsets']
-        lemma = c_tokens[data['qid2cid'][idx]]['lemma']
-        pos = c_tokens[data['qid2cid'][idx]]['pos']
-        ner = c_tokens[data['qid2cid'][idx]]['ner']
+        clemma = c_tokens[data['qid2cid'][idx]]['lemma']
+        cpos = c_tokens[data['qid2cid'][idx]]['pos']
+        cner = c_tokens[data['qid2cid'][idx]]['ner']
+        
         ans_tokens = []
         if len(data['answers']) > 0:
             for ans in data['answers'][idx]:
@@ -113,13 +122,17 @@ def process_dataset(data, tokenizer, workers=None):
         yield {
             'id': data['qids'][idx],
             'question': question,
+            'question_char': question_char,
             'document': document,
+            'document_char': document_char,
             'offsets': offsets,
             'answers': ans_tokens,
             'qlemma': qlemma,
-            'lemma': lemma,
-            'pos': pos,
-            'ner': ner,
+            'qpos': qpos,
+            'qner': qner,
+            'clemma': clemma,
+            'cpos': cpos,
+            'cner': cner,
         }
 
 
@@ -131,10 +144,9 @@ def process_dataset(data, tokenizer, workers=None):
 parser = argparse.ArgumentParser()
 parser.add_argument('data_dir', type=str, help='Path to SQuAD data directory')
 parser.add_argument('out_dir', type=str, help='Path to output file dir')
-parser.add_argument('--split', type=str, help='Filename for train/dev split',
-                    default='SQuAD-v1.1-train')
-parser.add_argument('--workers', type=int, default=None)
-parser.add_argument('--tokenizer', type=str, default='corenlp')
+parser.add_argument('--split', type=str, help='Filename for train/dev split')
+parser.add_argument('--num-workers', type=int, default=1)
+parser.add_argument('--tokenizer', type=str, default='spacy')
 args = parser.parse_args()
 
 t0 = time.time()
@@ -148,6 +160,6 @@ out_file = os.path.join(
 )
 print('Will write to file %s' % out_file, file=sys.stderr)
 with open(out_file, 'w') as f:
-    for ex in process_dataset(dataset, args.tokenizer, args.workers):
+    for ex in process_dataset(dataset, args.tokenizer, args.num_workers):
         f.write(json.dumps(ex) + '\n')
 print('Total time: %.4f (s)' % (time.time() - t0))
