@@ -1,0 +1,21 @@
+#!/bin/sh
+python scripts/reader/train.py \
+	--embed-dir /projects/tir2/users/bvp/embeddings/ \
+	--embedding-file glove.840B.300d.txt \
+	--num-epochs 100 \
+	--data-dir /projects/tir2/users/bvp/neulab/DrQA/data/datasets/ \
+    --train-file SQuAD-v1.1-train-processed-corenlp.txt \
+	--model-dir /projects/tir2/users/bvp/neulab/DrQA/models/ \
+    --model-name ORACLE_SQuAD_FINAL \
+	--batch-size 32 \
+	--display-iter 50 \
+    --valid-metric f1 \
+    --max-len 10 \
+    --use_sentence_selector \
+    --use_gold_sentence \
+    --use-in-question True \
+    --use-ner True \
+    --use-lemma True \
+    --use-tf True \
+    --use-pos True \
+    --tune-partial 1000 \
