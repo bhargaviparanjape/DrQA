@@ -14,7 +14,6 @@ def pad_single_seq(seq, max_len, pad_token = 0):
     seq += [pad_token for i in range(max_len - len(seq))]
     return seq
 
-
 def vectorize(ex, model, single_answer=False):
     """Torchify a single example."""
     args = model.args
@@ -27,6 +26,14 @@ def vectorize(ex, model, single_answer=False):
     sentence_lengths = [len(sent) for sent in ex['sentences']]
     max_length = max(sentence_lengths)
     sentences = torch.LongTensor([pad_single_seq([word_dict[w] for w in sent], max_length) for sent in ex['sentences']])
+
+    # if single_answer and args.clean_dataset:
+    #     gold_sentence = sentences[ex['gold_sentence_ids'][0]]
+    #     new_ex = ex
+    #     new_ex["document"] = gold_sentence
+    #     ex_batch = reader_batchify([reader_batchify(new_ex, model.sentence_selector, single_answer)])
+    #     top_sentence = model.oracle.predict(ex_batch, use_threshold=args.selection_threshold)[0]
+
 
     # Prepare other features also by sentence
     sentence_boundaries = []

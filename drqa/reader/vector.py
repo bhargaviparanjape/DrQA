@@ -44,7 +44,7 @@ def vectorize(ex, model, single_answer=False):
             # Use gold sentence
             if len(ex['gold_sentence_ids']) == 0:
                 return []
-            top_sentence = ex['gold_sentence_ids'][0]
+            top_sentence = [ex['gold_sentence_ids'][0]]
         else:
             ex_batch = sent_selector_batchify([sent_selector_vectorize(ex, model.sentence_selector, single_answer)])
 

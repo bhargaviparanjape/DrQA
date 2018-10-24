@@ -16,6 +16,7 @@ from tensorboardX import SummaryWriter
 from torch.autograd import Variable
 from .config import override_model_args
 from .rnn_selector import RnnSentSelector
+from .rnn_selector_v2 import  RnnSentSelector2
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,9 @@ class SentenceSelector(object):
         # Building network. If normalize if false, scores are not normalized
         # 0-1 per paragraph (no softmax).
         if args.model_type == 'rnn':
-                self.network = RnnSentSelector(args, normalize)
+            self.network = RnnSentSelector(args, normalize)
+        elif args.model_type == 'rnn2':
+            self.network = RnnSentSelector2(args, normalize)
         else:
             raise RuntimeError('Unsupported model: %s' % args.modeml_type)
 
