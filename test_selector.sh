@@ -1,0 +1,22 @@
+#!/bin/sh
+python scripts/selector/train.py \
+	--embed-dir /projects/tir2/users/bvp/embeddings/ \
+	--embedding-file glove.840B.300d.txt \
+	--num-epochs 50 \
+	--data-dir /projects/tir2/users/bvp/neulab/DrQA/data/datasets/ \
+    --train-file /projects/tir2/users/bvp/neulab/DrQA/data/datasets/SQuAD-v1.1-train-processed-corenlp.txt \
+    --dev-file /projects/tir2/users/bvp/neulab/DrQA/data/datasets/SQuAD-v1.1-addsent-dev-processed-corenlp.txt \
+    --dev-json /projects/tir2/users/bvp/neulab/DrQA/data/datasets/SQuAD-v1.1-addsent-dev.json \
+	--model-dir /projects/tir2/users/bvp/neulab/DrQA/models/ \
+	--pretrained /projects/tir2/users/bvp/neulab/DrQA/models/SENT_SELECT_ADV_SQuAD.mdl \
+	--batch-size 32 \
+	--optimizer adam \
+	--learning-rate 1e-4 \
+	--display-iter 50 \
+	--dropout-emb 0.2 \
+	--global_mode test \
+    --use-in-question True \
+    --use-ner True \
+    --use-lemma True \
+    --use-tf True \
+    --use-pos True \

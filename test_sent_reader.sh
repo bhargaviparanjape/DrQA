@@ -1,0 +1,30 @@
+#!/bin/sh
+python scripts/reader/train.py \
+	--embed-dir /projects/tir2/users/bvp/embeddings/ \
+	--embedding-file glove.840B.300d.txt \
+	--num-epochs 50 \
+	--data-dir /projects/tir2/users/bvp/neulab/DrQA/data/datasets/ \
+    --train-file /projects/tir2/users/bvp/neulab/DrQA/data/datasets/SQuAD-v1.1-train-processed-corenlp.txt \
+    --dev-file /projects/tir2/users/bvp/neulab/DrQA/data/datasets/SQuAD-v1.1-dev-processed-corenlp.txt \
+    --dev-json /projects/tir2/users/bvp/neulab/DrQA/data/datasets/SQuAD-v1.1-dev.json \
+	--model-dir /projects/tir2/users/bvp/neulab/DrQA/models/ \
+	--pretrained /projects/tir2/users/bvp/neulab/DrQA/models/ORACLE_SQuAD_PATIENCE.mdl.mdl \
+	--batch-size 32 \
+	--display-iter 50 \
+	--dropout-emb 0.2 \
+	--global_mode test \
+    --use-in-question True \
+    --use-ner True \
+    --use-pos True \
+    --use-tf True \
+    --use-lemma True \
+    --use_sentence_selector \
+    --sentence_selector_model /projects/tir2/users/bvp/neulab/DrQA/models/SENT_SELECT_ADV_RANDOM1_SQuAD.mdl \
+    --adv-dev-file SQuAD-v1.1-addrandomsent-dev-processed-corenlp.txt \
+    --adv-dev-json SQuAD-v1.1-addrandomsent-dev.json \
+    --adv-dev-file SQuAD-v1.1-addsent-dev-processed-corenlp.txt \
+    --adv-dev-json SQuAD-v1.1-addsent-dev.json \
+    --adv-dev-file SQuAD-v1.1-addonesent-dev-processed-corenlp.txt \
+    --adv-dev-json SQuAD-v1.1-addonesent-dev.json \
+    --adv-dev-file SQuAD-v1.1-addmodsent-dev-processed-corenlp.txt \
+    --adv-dev-json SQuAD-v1.1-addmodsent-dev.json \
