@@ -52,7 +52,7 @@ def process_dataset(dataset):
 			'sentences' : sentences,
 			'gold_sentence_ids' : gold_sentence_ids
 		}
-
+	
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', type=str, help='Path to SQuAD data directory')
