@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "script/train.py", line 547, in <module>
+    set_defaults(args)
+  File "script/train.py", line 130, in set_defaults
+    raise IOError('No such file: %s' % args.dev_json)
+OSError: No such file: /projects/tir2/users/bvp/neulab/DrQA/rcmodels/MnemonicReader/data/datasets/SQuAD-v1.1-dev.json
