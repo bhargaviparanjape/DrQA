@@ -17,7 +17,7 @@ from os.path import dirname, realpath
 import numpy as np
 import torch
 
-sys.path.append(dirname(dirname(dirname(realpath(__file__)))))
+sys.path.insert(0, dirname(dirname(dirname(realpath(__file__)))))
 from drqa.reader import utils, config
 from drqa.reader import data as reader_data, vector as reader_vector
 from drqa.selector import data as selector_data, vector as selector_vector

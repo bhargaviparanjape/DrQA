@@ -4,6 +4,7 @@ import sys
 import json
 import time
 import csv
+import pdb
 
 def load_dataset(path):
 	output = []
@@ -21,18 +22,23 @@ def process_dataset(dataset):
 		context_id = data[1]
 		document = [s.strip() for s in data[2].split()]
 		question = [s.strip() for s in data[3].split()]
-		answer_range = tuple([int(el) for el in data[4].split(":")])
-		answers = [document[a] for a in range(answer_range)]
-		start = answer_range[0]
-		end = answer_range[1]
+		answer_ranges = [tuple([int(range_.split(':')[0]), int(range_.split(':')[1])]) for range_ in data[4].split(',')]
+		# answer_range = tuple([int(el) for el in data[4].split(":")])
+		answers = [[document[a] for a in range(ans[0], ans[1])] for ans in answer_ranges]
+		start = [a[0] for a in answer_ranges]
+		end = [a[1] for a in answer_ranges]
 		sentence_starts = [0] + [int(a) for a in data[5].split(',')]
 		sentences = [document[sentence_starts[i]:sentence_starts[i+1]] for i in range(len(sentence_starts)-1)]
 		gold_sentence_ids = []
 		for pos in range(len(sentence_starts)-1):
-			if start >= sentence_starts[pos] and end < sentence_starts[pos+1]:
-				gold_sentence_ids.append(pos)
-			elif start >= sentence_starts[pos] and end >= sentence_starts[pos+1]:
-				gold_sentence_ids.append(pos, pos+1)
+			for tup in zip(start, end):
+				s = tup[0]
+				e = tup[1]
+				if s >= sentence_starts[pos] and e < sentence_starts[pos+1]:
+					gold_sentence_ids.append(pos)
+				elif s >= sentence_starts[pos] and e >= sentence_starts[pos+1]:
+					gold_sentence_ids.append(pos)
+					gold_sentence_ids.append(pos+1)
 		if len(gold_sentence_ids)  == 0:
 			print("No golden sentence available")
 		yield {
@@ -49,8 +55,8 @@ def process_dataset(dataset):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('data_dir', type=str, help='Path to SQuAD data directory')
-parser.add_argument('out_dir', type=str, help='Path to output file dir')
+parser.add_argument('--data_dir', type=str, help='Path to SQuAD data directory')
+parser.add_argument('--out_dir', type=str, help='Path to output file dir')
 parser.add_argument('--split', type=str, help='Filename for train/dev split',
                     default='NewsQA-v1.0-train')
 
@@ -58,17 +64,17 @@ args = parser.parse_args()
 
 t0 = time.time()
 
-in_file = os.path.join(args.data_dir, args.split + '.json')
+in_file = os.path.join(args.data_dir, args.split + '.csv')
 print('Loading dataset %s' % in_file, file=sys.stderr)
 dataset = load_dataset(in_file)
 
 
 out_file = os.path.join(
-    args.out_dir, '%s-processed-%s.txt' % (args.split, args.tokenizer)
+    args.out_dir, '%s-processed-%s.txt' % (args.split, "corenlp")
 )
 
 with open(out_file, 'w') as f:
-	for ex in process_dataset(dataset, args.tokenizer, args.workers):
+	for ex in process_dataset(dataset):
 		f.write(json.dumps(ex) + '\n')
 
 print('Total time: %.4f (s)' % (time.time() - t0))

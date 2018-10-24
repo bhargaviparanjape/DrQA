@@ -15,7 +15,7 @@ import sys
 import subprocess
 import logging
 from os.path import dirname,realpath
-sys.path.append(dirname(dirname(dirname(realpath(__file__)))))
+sys.path.insert(0, dirname(dirname(dirname(realpath(__file__)))))
 from tensorboardX import SummaryWriter
 from drqa.selector import utils, vector, config, data
 from drqa.selector import SentenceSelector
@@ -257,16 +257,17 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
 
     # Make predictions
     examples = 0
+    attacked = 0
     for ex in data_loader:
         batch_size = ex[0].size(0)
         pred = model.predict(ex)
         target = ex[-2:-1]
 
 
-        #if args.global_mode == "test":
-        #    preds = np.array([p[0] for p in pred])
-        #    sent_lengths = (ex[3].sum(1) - 1).long().data.numpy()
-        #    attacked = (preds == sent_lengths).sum()
+        if args.global_mode == "test":
+            preds = np.array([p[0] for p in pred])
+            sent_lengths = (ex[3].sum(1)).long().data.numpy()
+            attacked += (preds == sent_lengths - 1).sum()
 
         # We get metrics for independent start/end and joint start/end
         accuracy = eval_accuracies(pred, target, mode)
@@ -285,9 +286,9 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
                 (examples) +
                 'valid time = %.2f (s)' % eval_time.time())
 
-    #if args.global_mode == "test":
-    #    print(attacked)
-    #    print(examples)
+    if args.global_mode == "test":
+        print("Number of examples attacked succesfully: %d" % attacked)
+        print("Total number of examples: %d" % examples)
     return {'accuracy': acc.avg}
 
 
