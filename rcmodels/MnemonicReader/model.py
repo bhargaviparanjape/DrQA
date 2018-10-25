@@ -19,6 +19,8 @@ from r_net import R_Net
 from rnn_reader import RnnDocReader
 from m_reader import MnemonicReader
 from data import Dictionary
+sys.path.append('/home/ubuntu/bvp/DrQA/drqa/selector')
+from selector.model import SentenceSelector
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +68,13 @@ class DocReader(object):
                 self.network.register_buffer('fixed_embedding', fixed_embedding)
             else:
                 self.network.load_state_dict(state_dict)
+
+        if args.use_sentence_selector:
+            # Get State dict from pretrained sentence selector
+            if args.sentence_selector_model:
+                self.sentence_selector = SentenceSelector.load(args.sentence_selector_model)
+            else:
+                self.sentence_selector = None
 
     def expand_dictionary(self, words):
         """Add words to the DocReader dictionary if they do not exist. The
