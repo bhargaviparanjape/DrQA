@@ -425,7 +425,8 @@ def validate_adversarial(args, model, global_stats, mode="dev"):
         else:
             dev_sampler = torch.utils.data.sampler.SequentialSampler(dev_dataset)
         if args.use_sentence_selector:
-            batching_function = reader_vector.batchify_sentences
+            dev_batcher = reader_vector.sentence_batchifier(model, single_answer=False)
+            batching_function = dev_batcher.batchify
         else:
             batching_function = reader_vector.batchify
         dev_loader = torch.utils.data.DataLoader(

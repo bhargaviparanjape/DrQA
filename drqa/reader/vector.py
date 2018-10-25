@@ -58,6 +58,8 @@ class sentence_batchifier():
             flag = True
             sentence_boundaries = batch_sentence_boundaries[i]
             offsets = batch_offsets[i]
+            if len(top_sentences[i]) == 0:
+                continue
             window = sentence_boundaries[top_sentences[i][0]]
 
             # Gold starts and ends (will be lists during inference)
