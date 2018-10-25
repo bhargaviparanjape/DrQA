@@ -349,7 +349,7 @@ def validate_official(args, data_loader, model, global_stats,
                 utils.f1_score, prediction, ground_truths)
 
             if f1_example != 0:
-                clean_id_file.write(ex_id + "\n")
+                clean_id_file.write(ex_id[i] + "\n")
 
 
         examples += batch_size

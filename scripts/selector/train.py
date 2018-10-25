@@ -16,7 +16,6 @@ import subprocess
 import logging
 from os.path import dirname,realpath
 sys.path.insert(0, dirname(dirname(dirname(realpath(__file__)))))
-from tensorboardX import SummaryWriter
 from drqa.selector import utils, vector, config, data
 from drqa.selector import SentenceSelector
 from drqa import DATA_DIR as DRQA_DATA
