@@ -274,6 +274,8 @@ class DocReader(object):
             self.optimizer = optim.Adadelta(parameters, lr=self.args.learning_rate,
                                             rho=self.args.rho, eps=self.args.eps,
                                             weight_decay=self.args.weight_decay)
+        elif self.args.optimizer == "adam":
+            self.optimizer = optim.Adam(parameters, lr=self.args.learning_rate)
         else:
             raise RuntimeError('Unsupported optimizer: %s' %
                                self.args.optimizer)

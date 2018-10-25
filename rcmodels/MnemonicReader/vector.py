@@ -8,7 +8,122 @@
 
 from collections import Counter
 import torch
+from drqa.selector.vector import vectorize as sent_selector_vectorize
+from drqa.selector.vector import batchify as sent_selector_batchify
 
+def pad_single_seq(seq, max_len, pad_token = 0):
+    seq += [pad_token for i in range(max_len - len(seq))]
+    return seq
+
+class sentence_batchifier():
+    def __init__(self, model, single_answer):
+        self.args = model.args
+        self.model = model
+        self.single_answer = single_answer
+
+    def batchify(self, batch):
+        (batch_sentence_boundaries, batch_offsets, batch_start, batch_end) = ([b[0] for b in batch], [b[1] for b in batch], [b[2] for b in batch], [b[3] for b in batch])
+        # x1, x1_f, x1_mask, x1_sent_mask, x2, x2_mask, y_g, ids
+        sentence_selector_batch = sent_selector_batchify([b[-1] for b in batch])
+        batch_output, ids = sentence_selector_batch[:-1], sentence_selector_batch[-1]
+
+        if self.args.use_gold_sentence:
+            # Use gold sentence
+            if len(batch_output) == 6:
+                # Condition never hits because supervision always exists
+                return []
+            top_sentences = batch_output[6]
+        else:
+            if self.args.dynamic_selector:
+                top_sentences = self.model.sentence_selector.predict(batch_output, use_threshold=self.args.selection_threshold)[0]
+            else:
+                top_sentences = self.model.sentence_selector.predict(batch_output)
+
+        # Trim the batch based on selected sentences : torchy way (no support for dynamic context, no support for  k = 3)
+        selected_questions = []
+        selected_question_masks = []
+        selected_ids = []
+        selected_sentences = []
+        selected_features = []
+        selected_mask = []
+        selected_offsets = []
+        new_starts = []
+        new_ends = []
+
+        gold_sentences = batch_output[-1]
+        for i in range(batch_output[0].shape[0]):
+            # First Locate answer, if not present, then skip while training
+            flag = True
+            sentence_boundaries = batch_sentence_boundaries[i]
+            offsets = batch_offsets[i]
+            window = sentence_boundaries[top_sentences[i][0]]
+
+            # Gold starts and ends (will be lists during inference)
+            if torch.is_tensor(batch_start[i]):
+                starts = batch_start[i].data.numpy().tolist()
+                ends = batch_end[i].data.numpy().tolist()
+            else:
+                starts = batch_start[i]
+                ends = batch_end[i]
+
+
+            for answer in zip(starts, ends):
+                if answer[0] >= window[0] and answer[1] < window[1]:
+                    new_start = answer[0] - window[0]
+                    new_end = answer[1] - window[0]
+                    flag = False
+                    break
+                elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top_sentences[i][0] + 1][1] and answer[0] < window[1]:
+                    new_start = answer[0] - window[0]
+                    new_end = window[1] - window[0] - 1
+                    flag = False
+                    break
+                # Single Answer is False for development set
+                # Logic of Matt Gardner comes here (Zack's extension to make to oracle better)
+            if flag and self.single_answer == True:
+                continue
+            # At dev time, give all possible changed starts and ends
+            if not self.single_answer and len(starts) > 0:
+                new_start = []
+                new_end = []
+                for top in gold_sentences[i]:
+                    window = sentence_boundaries[top]
+                    for answer in zip(starts, ends):
+                        if answer[0] >= window[0] and answer[1] < window[1]:
+                            new_start.append(answer[0] - window[0])
+                            new_end.append(answer[1] - window[0])
+                        elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top + 1][1]:
+                            new_start.append(answer[0] - window[0])
+                            new_end.append(answer[1] - window[1])
+
+            new_starts.append(new_start)
+            new_ends.append(new_end)
+            selected_questions.append(batch_output[4][i].unsqueeze(0))
+            selected_question_masks.append(batch_output[5][i].unsqueeze(0))
+            selected_ids.append(ids[i])
+            selected_sentences.append(batch_output[0][i][top_sentences[i][0], :].unsqueeze(0))
+            selected_features.append(batch_output[1][i][top_sentences[i][0], :].unsqueeze(0))
+            selected_mask.append(batch_output[2][i][top_sentences[i][0], :].unsqueeze(0))
+            selected_offsets.append(offsets[sentence_boundaries[top_sentences[i][0]][0]:sentence_boundaries[top_sentences[i][0]][1]])
+
+        ## How will sentence mask be used here : doesnt have to be since the model will never pick anything that is in the mask
+        question = torch.cat(selected_questions, dim=0)
+        question_mask = torch.cat(selected_question_masks, dim=0)
+        document = torch.cat(selected_sentences, dim=0)
+        document_mask = torch.cat(selected_mask, dim=0)
+        document_features = torch.cat(selected_features, dim=0)
+
+        ## Trim if batch size has been reduced (do this to exactly reproduce previous results)
+
+        ## Depending on single answer either torchify starts and ends or maintain them as lists
+        if self.single_answer:
+            y_s = torch.LongTensor(new_starts)
+            y_e = torch.LongTensor(new_ends)
+        else:
+            y_s = new_starts
+            y_e = new_ends
+
+        return document, document_features, document_mask, question, question_mask, y_s, y_e, selected_offsets, selected_ids
 
 def vectorize(ex, model, single_answer=False):
     """Torchify a single example."""
@@ -100,9 +215,18 @@ def vectorize(ex, model, single_answer=False):
     else:
         start = [a[0] for a in ex['answers']]
         end = [a[1] for a in ex['answers']]
+
+    selected_offset = None
+
+    if args.use_sentence_selector:
+        sentence_boundaries = []
+        counter = 0
+        for sent in ex['sentences']:
+            sentence_boundaries.append([counter, counter + len(sent)])
+            counter += len(sent)
+        return sentence_boundaries, ex["offsets"], start, end, sent_selector_vectorize(ex, model, single_answer)
     
     return document, document_char, c_features, question, question_char, q_features, start, end, ex['id']
-
 
 def batchify(batch):
     """Gather a batch of individual examples into one batch."""

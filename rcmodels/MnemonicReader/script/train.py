@@ -53,7 +53,7 @@ def add_train_args(parser):
                          help='Train on CPU, even if GPUs are available.')
     runtime.add_argument('--gpu', type=int, default=-1,
                          help='Run on a specific GPU')
-    runtime.add_argument('--data-workers', type=int, default=5,
+    runtime.add_argument('--data-workers', type=int, default=1,
                          help='Number of subprocesses for data loading')
     runtime.add_argument('--parallel', type='bool', default=False,
                          help='Use DataParallel on all available GPUs')
@@ -419,19 +419,23 @@ def validate_adversarial(args, model, global_stats, mode="dev"):
         exs = utils.load_data(args, args.adv_dev_file[idx])
         logger.info('Num dev examples = %d' % len(exs))
         ## Create dataloader
-        dev_dataset = reader_data.ReaderDataset(exs, model, single_answer=False)
+        dev_dataset = data.ReaderDataset(exs, model, single_answer=False)
         if args.sort_by_len:
-            dev_sampler = reader_data.SortedBatchSampler(dev_dataset.lengths(),
+            dev_sampler = data.SortedBatchSampler(dev_dataset.lengths(),
                                                   args.test_batch_size,
                                                   shuffle=False)
         else:
             dev_sampler = torch.utils.data.sampler.SequentialSampler(dev_dataset)
+        if args.use_sentence_selector:
+            batching_function = vector.batchify_sentences
+        else:
+            batching_function = vector.batchify
         dev_loader = torch.utils.data.DataLoader(
             dev_dataset,
             batch_size=args.test_batch_size,
             sampler=dev_sampler,
             num_workers=args.data_workers,
-            collate_fn=reader_vector.batchify,
+            collate_fn=batching_function,
             pin_memory=args.cuda,
         )
 
@@ -618,12 +622,17 @@ def main(args):
                                                 shuffle=True)
     else:
         train_sampler = torch.utils.data.sampler.RandomSampler(train_dataset)
+    if args.use_sentence_selector:
+        train_batcher = vector.sentence_batchifier(model, single_answer=True)
+        batching_function = train_batcher.batchify
+    else:
+        batching_function = vector.batchify
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         sampler=train_sampler,
         num_workers=args.data_workers,
-        collate_fn=vector.batchify,
+        collate_fn=batching_function,
         pin_memory=args.cuda,
     )
     dev_dataset = data.ReaderDataset(dev_exs, model, single_answer=False)
@@ -633,12 +642,17 @@ def main(args):
                                               shuffle=False)
     else:
         dev_sampler = torch.utils.data.sampler.SequentialSampler(dev_dataset)
+    if args.use_sentence_selector:
+        dev_batcher = vector.sentence_batchifier(model, single_answer=False)
+        batching_function = dev_batcher.batchify
+    else:
+        batching_function = vector.batchify
     dev_loader = torch.utils.data.DataLoader(
         dev_dataset,
         batch_size=args.test_batch_size,
         sampler=dev_sampler,
         num_workers=args.data_workers,
-        collate_fn=vector.batchify,
+        collate_fn=batching_function,
         pin_memory=args.cuda,
     )
 

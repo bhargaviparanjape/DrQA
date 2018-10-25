@@ -58,6 +58,9 @@ class sentence_batchifier():
             flag = True
             sentence_boundaries = batch_sentence_boundaries[i]
             offsets = batch_offsets[i]
+
+            if len(top_sentences[i]) == 0:
+                continue
             window = sentence_boundaries[top_sentences[i][0]]
 
             # Gold starts and ends (will be lists during inference)
@@ -94,7 +97,8 @@ class sentence_batchifier():
                         if answer[0] >= window[0] and answer[1] < window[1]:
                             new_start.append(answer[0] - window[0])
                             new_end.append(answer[1] - window[0])
-                        elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top + 1][1]:
+                        # Extra condiiton added ; results may differ
+                        elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top + 1][1] and answer[0] < window[1]:
                             new_start.append(answer[0] - window[0])
                             new_end.append(answer[1] - window[1])
 
@@ -116,6 +120,7 @@ class sentence_batchifier():
         document_features = torch.cat(selected_features, dim=0)
 
         ## Trim if batch size has been reduced (do this to exactly reproduce previous results)
+
 
         ## Depending on single answer either torchify starts and ends or maintain them as lists
         if self.single_answer:
