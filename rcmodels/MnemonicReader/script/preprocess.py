@@ -61,8 +61,12 @@ def load_dataset(path):
         data = json.load(f)['data']
     output = {'qids': [], 'questions': [], 'answers': [],
               'contexts': [], 'qid2cid': []}
-    for article in data:
-        for paragraph in article['paragraphs']:
+    for idx, article in enumerate(data):
+        if idx > 2 and args.truncate:
+            break
+        for i, paragraph in enumerate(article['paragraphs']):
+                if i > 5 and args.truncate:
+                    break:
             output['contexts'].append(paragraph['context'])
             for qa in paragraph['qas']:
                 output['qids'].append(qa['id'])
@@ -147,6 +151,7 @@ parser.add_argument('out_dir', type=str, help='Path to output file dir')
 parser.add_argument('--split', type=str, help='Filename for train/dev split')
 parser.add_argument('--num-workers', type=int, default=1)
 parser.add_argument('--tokenizer', type=str, default='spacy')
+parser.add_argument('--truncate', action="store_true", default=False)
 args = parser.parse_args()
 
 t0 = time.time()
