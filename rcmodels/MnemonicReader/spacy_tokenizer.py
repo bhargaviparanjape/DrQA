@@ -22,9 +22,10 @@ class Tokens(object):
     LEMMA = 5
     NER = 6
 
-    def __init__(self, data, annotators, opts=None):
+    def __init__(self, data, sentence_boundaries, annotators, opts=None):
         self.data = data
         self.annotators = annotators
+        self.sentence_boundaries = sentence_boundaries
         self.opts = opts or {}
 
     def __len__(self):
@@ -51,6 +52,9 @@ class Tokens(object):
             return [t[self.CHAR].lower() for t in self.data]
         else:
             return [t[self.CHAR] for t in self.data]
+
+    def sentences(self):
+        return self.sentence_boundaries
 
     def words(self, uncased=False):
         """Returns a list of the text of each token
@@ -151,7 +155,7 @@ class SpacyTokenizer(object):
         model = kwargs.get('model', 'en')
         self.annotators = copy.deepcopy(kwargs.get('annotators', set()))
         self.nlp = spacy.load(model)
-        self.nlp.remove_pipe('parser')
+        # self.nlp.remove_pipe('parser')
         if not any([p in self.annotators for p in ['lemma', 'pos', 'ner']]):
             self.nlp.remove_pipe('tagger')
         if 'ner' not in self.annotators:
@@ -164,6 +168,13 @@ class SpacyTokenizer(object):
         tokens = self.nlp(clean_text)
 
         data = []
+        sentence_boundaries = []
+        curr = 0
+        for sent in tokens.sents:
+            sent_length = len([token for token in sent])
+            sentence_boundaries.append((curr, curr + sent_length))
+            curr += sent_length
+
         for i in range(len(tokens)):
             # Get whitespace
             start_ws = tokens[i].idx
@@ -183,7 +194,7 @@ class SpacyTokenizer(object):
             ))
 
         # Set special option for non-entity tag: '' vs 'O' in spaCy
-        return Tokens(data, self.annotators, opts={'non_ent': ''})
+        return Tokens(data, sentence_boundaries, self.annotators, opts={'non_ent': ''})
 
     def shutdown(self):
         pass
