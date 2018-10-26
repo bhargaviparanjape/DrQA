@@ -426,10 +426,10 @@ def validate_adversarial(args, model, global_stats, mode="dev"):
                                                   shuffle=False)
         else:
             dev_sampler = torch.utils.data.sampler.SequentialSampler(dev_dataset)
-        if args.use_sentence_selector:
-            batching_function = vector.batchify_sentences
-        else:
-            batching_function = vector.batchify
+        # if args.use_sentence_selector:
+        #     batching_function = vector.batchify_sentences
+        # else:
+        batching_function = vector.batchify
         dev_loader = torch.utils.data.DataLoader(
             dev_dataset,
             batch_size=args.test_batch_size,
@@ -622,11 +622,11 @@ def main(args):
                                                 shuffle=True)
     else:
         train_sampler = torch.utils.data.sampler.RandomSampler(train_dataset)
-    if args.use_sentence_selector:
-        train_batcher = vector.sentence_batchifier(model, single_answer=True)
-        batching_function = train_batcher.batchify
-    else:
-        batching_function = vector.batchify
+    # if args.use_sentence_selector:
+    #     train_batcher = vector.sentence_batchifier(model, single_answer=True)
+    #     batching_function = train_batcher.batchify
+    # else:
+    batching_function = vector.batchify
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=args.batch_size,
@@ -642,11 +642,11 @@ def main(args):
                                               shuffle=False)
     else:
         dev_sampler = torch.utils.data.sampler.SequentialSampler(dev_dataset)
-    if args.use_sentence_selector:
-        dev_batcher = vector.sentence_batchifier(model, single_answer=False)
-        batching_function = dev_batcher.batchify
-    else:
-        batching_function = vector.batchify
+    # if args.use_sentence_selector:
+    #     dev_batcher = vector.sentence_batchifier(model, single_answer=False)
+    #     batching_function = dev_batcher.batchify
+    # else:
+    batching_function = vector.batchify
     dev_loader = torch.utils.data.DataLoader(
         dev_dataset,
         batch_size=args.test_batch_size,

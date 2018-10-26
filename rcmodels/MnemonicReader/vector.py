@@ -125,18 +125,210 @@ class sentence_batchifier():
 
         return document, document_features, document_mask, question, question_mask, y_s, y_e, selected_offsets, selected_ids
 
+# def vectorize(ex, model, single_answer=False):
+#     """Torchify a single example."""
+#     args = model.args
+#     word_dict = model.word_dict
+#     char_dict = model.char_dict
+#     feature_dict = model.feature_dict
+#
+#     # Index words
+#     document = torch.LongTensor([word_dict[w] for w in ex['document']])
+#     document_char = torch.LongTensor([char_dict[w] for w in ex['document_char']])
+#     question = torch.LongTensor([word_dict[w] for w in ex['question']])
+#     question_char = torch.LongTensor([char_dict[w] for w in ex['question_char']])
+#
+#     # Create extra features vector
+#     if len(feature_dict) > 0:
+#         c_features = torch.zeros(len(ex['document']), len(feature_dict))
+#         q_features = torch.zeros(len(ex['question']), len(feature_dict))
+#     else:
+#         c_features = None
+#         q_features = None
+#
+#     # f_{exact_match}
+#     if args.use_exact_match:
+#         q_words_cased = {w for w in ex['question']}
+#         q_words_uncased = {w.lower() for w in ex['question']}
+#         q_lemma = {w for w in ex['qlemma']} if args.use_lemma else None
+#         for i in range(len(ex['document'])):
+#             if ex['document'][i] in q_words_cased:
+#                 c_features[i][feature_dict['in_cased']] = 1.0
+#             if ex['document'][i].lower() in q_words_uncased:
+#                 c_features[i][feature_dict['in_uncased']] = 1.0
+#             if q_lemma and ex['clemma'][i] in q_lemma:
+#                 c_features[i][feature_dict['in_lemma']] = 1.0
+#
+#         c_words_cased = {w for w in ex['document']}
+#         c_words_uncased = {w.lower() for w in ex['document']}
+#         c_lemma = {w for w in ex['clemma']} if args.use_lemma else None
+#         for i in range(len(ex['question'])):
+#             if ex['question'][i] in c_words_cased:
+#                 q_features[i][feature_dict['in_cased']] = 1.0
+#             if ex['question'][i].lower() in c_words_uncased:
+#                 q_features[i][feature_dict['in_uncased']] = 1.0
+#             if c_lemma and ex['qlemma'][i] in c_lemma:
+#                 q_features[i][feature_dict['in_lemma']] = 1.0
+#
+#     # f_{token} (POS)
+#     if args.use_pos:
+#         for i, w in enumerate(ex['cpos']):
+#             f = 'pos=%s' % w
+#             if f in feature_dict:
+#                 c_features[i][feature_dict[f]] = 1.0
+#         for i, w in enumerate(ex['qpos']):
+#             f = 'pos=%s' % w
+#             if f in feature_dict:
+#                 q_features[i][feature_dict[f]] = 1.0
+#
+#     # f_{token} (NER)
+#     if args.use_ner:
+#         for i, w in enumerate(ex['cner']):
+#             f = 'ner=%s' % w
+#             if f in feature_dict:
+#                 c_features[i][feature_dict[f]] = 1.0
+#         for i, w in enumerate(ex['qner']):
+#             f = 'ner=%s' % w
+#             if f in feature_dict:
+#                 q_features[i][feature_dict[f]] = 1.0
+#
+#     # f_{token} (TF)
+#     if args.use_tf:
+#         counter = Counter([w.lower() for w in ex['document']])
+#         l = len(ex['document'])
+#         for i, w in enumerate(ex['document']):
+#             c_features[i][feature_dict['tf']] = counter[w.lower()] * 1.0 / l
+#         counter = Counter([w.lower() for w in ex['question']])
+#         l = len(ex['question'])
+#         for i, w in enumerate(ex['question']):
+#             q_features[i][feature_dict['tf']] = counter[w.lower()] * 1.0 / l
+#
+#     # Maybe return without target
+#     if 'answers' not in ex:
+#         return document, document_char, c_features, question, question_char, q_features, ex['id']
+#
+#     # ...or with target(s) (might still be empty if answers is empty)
+#     if single_answer:
+#         assert(len(ex['answers']) > 0)
+#         start = torch.LongTensor(1).fill_(ex['answers'][0][0])
+#         end = torch.LongTensor(1).fill_(ex['answers'][0][1])
+#     else:
+#         start = [a[0] for a in ex['answers']]
+#         end = [a[1] for a in ex['answers']]
+#
+#     selected_offset = None
+#
+#     if args.use_sentence_selector:
+#         sentence_boundaries = []
+#         counter = 0
+#         for sent in ex['sentences']:
+#             sentence_boundaries.append([counter, counter + len(sent)])
+#             counter += len(sent)
+#         return sentence_boundaries, ex["offsets"], start, end, sent_selector_vectorize(ex, model, single_answer)
+#
+#     return document, document_char, c_features, question, question_char, q_features, start, end, ex['id']
+
 def vectorize(ex, model, single_answer=False):
     """Torchify a single example."""
     args = model.args
     word_dict = model.word_dict
     char_dict = model.char_dict
     feature_dict = model.feature_dict
+    ex['pos'] = ex['cpos']
+    ex['ner'] = ex['cner']
+    ex['lemma'] = ex['clemma']
 
     # Index words
     document = torch.LongTensor([word_dict[w] for w in ex['document']])
     document_char = torch.LongTensor([char_dict[w] for w in ex['document_char']])
     question = torch.LongTensor([word_dict[w] for w in ex['question']])
     question_char = torch.LongTensor([char_dict[w] for w in ex['question_char']])
+
+
+    sentence_boundaries = []
+    counter = 0
+    for sent in ex['sentences']:
+        sentence_boundaries.append([counter, counter + len(sent)])
+        counter += len(sent)
+
+    # If Sentence Selector is turned on, then run the document through and get the top sentence
+    selected_offset = None
+    if args.use_sentence_selector:
+        # sentence_lengths = [len(sent) for sent in ex['sentences']]
+        # max_length = max(sentence_lengths)
+        # sentences = torch.LongTensor([pad_single_seq([word_dict[w] for w in sent], max_length) for sent in ex['sentences']])
+
+        if args.use_gold_sentence:
+            # Use gold sentence
+            if len(ex['gold_sentence_ids']) == 0:
+                return []
+            top_sentence = [ex['gold_sentence_ids'][0]]
+        else:
+            ex_batch = sent_selector_batchify([sent_selector_vectorize(ex, model.sentence_selector, single_answer)])
+
+            if args.dynamic_selector:
+                top_sentence = model.sentence_selector.predict(ex_batch, use_threshold = args.selection_threshold)[0]
+            else:
+                top_sentence = model.sentence_selector.predict(ex_batch)[0]
+            #if len(ex['gold_sentence_ids']) > 0 and top_sentence not in ex['gold_sentence_ids']:
+            #    return []
+        # Extract top sentence and change ex["document"] accordingly
+        tokens = []
+        pos = []
+        ner = []
+        lemma = []
+        offset_subset = []
+        assert len(ex['pos']) == len(ex['ner']) == len(ex['lemma'])
+        ## also need to add characters
+        for t in top_sentence:
+            tokens += ex['sentences'][t]
+            window = sentence_boundaries[t]
+            pos += ex['pos'][window[0]:window[1]]
+            ner += ex['ner'][window[0]:window[1]]
+            lemma += ex['lemma'][window[0]:window[1]]
+            offset_subset += ex["offsets"][sentence_boundaries[t][0]:sentence_boundaries[t][1]]
+
+        # Reconstruct based on what you are selecting
+        document = torch.LongTensor([word_dict[w] for w in tokens])
+        ex['document'] = tokens
+        ex['cpos'] = pos
+        ex['cner'] = ner
+        ex['clemma'] = lemma
+        selected_offset = offset_subset
+        ## Get first letters of the current document tokens
+        document_char = torch.LongTensor([tokens[i][0] if len(tokens[i]) > 0 else '' for i in range(len(tokens))])
+
+
+        # Check if selected sentence contains any answer span
+        # account for answers being in between the gold sentence
+        flag = True
+        window = sentence_boundaries[top_sentence[0]]
+        for answer in ex['answers']:
+            if answer[0] >= window[0] and answer[1] < window[1]:
+                new_start = answer[0] - window[0]
+                new_end = answer[1] - window[0]
+                flag = False
+                break
+            elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top_sentence[0] + 1][1]:
+                new_start = answer[0] - window[0]
+                new_end = window[1] - window[0] - 1
+                flag = False
+                break
+        # Single Answer is False for development set
+        if flag and single_answer == True:
+            return []
+        if not single_answer and len(ex['answers'])> 0:
+            new_start = []
+            new_end = []
+            for top in ex["gold_sentence_ids"]:
+                window = sentence_boundaries[top]
+                for answer in ex['answers']:
+                    if answer[0] >= window[0] and answer[1] < window[1]:
+                        new_start.append(answer[0] - window[0])
+                        new_end.append(answer[1] - window[0])
+                    elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top + 1][1]:
+                        new_start.append(answer[0] - window[0])
+                        new_end.append(answer[1] - window[1])
 
     # Create extra features vector
     if len(feature_dict) > 0:
@@ -208,31 +400,35 @@ def vectorize(ex, model, single_answer=False):
         return document, document_char, c_features, question, question_char, q_features, ex['id']
 
     # ...or with target(s) (might still be empty if answers is empty)
+    # put sentence selection criterion here
     if single_answer:
         assert(len(ex['answers']) > 0)
-        start = torch.LongTensor(1).fill_(ex['answers'][0][0])
-        end = torch.LongTensor(1).fill_(ex['answers'][0][1])
+        if args.use_sentence_selector:
+            start = torch.LongTensor(1).fill_(new_start)
+            end = torch.LongTensor(1).fill_(new_end)
+        else:
+            start = torch.LongTensor(1).fill_(ex['answers'][0][0])
+            end = torch.LongTensor(1).fill_(ex['answers'][0][1])
     else:
-        start = [a[0] for a in ex['answers']]
-        end = [a[1] for a in ex['answers']]
+        # Do same and send as list
+        if len(ex['answers']) == 0:
+            start = []
+            end = []
+        elif args.use_sentence_selector:
+            start = new_start
+            end = new_end
+        else:
+            start = [a[0] for a in ex['answers']]
+            end = [a[1] for a in ex['answers']]
 
-    selected_offset = None
+    return document, document_char, c_features, question, question_char, q_features, selected_offset, start, end, ex['id']
 
-    if args.use_sentence_selector:
-        sentence_boundaries = []
-        counter = 0
-        for sent in ex['sentences']:
-            sentence_boundaries.append([counter, counter + len(sent)])
-            counter += len(sent)
-        return sentence_boundaries, ex["offsets"], start, end, sent_selector_vectorize(ex, model, single_answer)
-    
-    return document, document_char, c_features, question, question_char, q_features, start, end, ex['id']
 
 def batchify(batch):
     """Gather a batch of individual examples into one batch."""
     NUM_INPUTS = 6
     NUM_TARGETS = 2
-    NUM_EXTRA = 1
+    NUM_EXTRA = 2
 
     docs = [ex[0] for ex in batch]
     doc_chars = [ex[1] for ex in batch]
@@ -240,6 +436,7 @@ def batchify(batch):
     questions = [ex[3] for ex in batch]
     question_chars = [ex[4] for ex in batch]
     q_features = [ex[5] for ex in batch]
+    offsets = [ex[6] for ex in batch]
     ids = [ex[-1] for ex in batch]
 
     # Batch documents and features
@@ -291,4 +488,4 @@ def batchify(batch):
     else:
         raise RuntimeError('Incorrect number of inputs per example.')
 
-    return x1, x1_c, x1_f, x1_mask, x2, x2_c, x2_f, x2_mask, y_s, y_e, ids
+    return x1, x1_c, x1_f, x1_mask, x2, x2_c, x2_f, x2_mask, y_s, y_e, offsets, ids
