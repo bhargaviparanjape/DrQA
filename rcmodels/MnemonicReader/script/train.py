@@ -295,7 +295,7 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
     for ex in data_loader:
         batch_size = ex[0].size(0)
         pred_s, pred_e, _ = model.predict(ex)
-        target_s, target_e = ex[-3:-1]
+        target_s, target_e = ex[-4:-2]
 
         # We get metrics for independent start/end and joint start/end
         accuracies = eval_accuracies(pred_s, target_s, pred_e, target_e)
@@ -391,6 +391,7 @@ def eval_accuracies(pred_s, target_s, pred_e, target_e):
 
         # End matches
         if pred_e[i] in target_e[i]:
+
             end.update(1)
         else:
             end.update(0)

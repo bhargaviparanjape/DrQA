@@ -296,7 +296,7 @@ def vectorize(ex, model, single_answer=False):
         ex['clemma'] = lemma
         selected_offset = offset_subset
         ## Get first letters of the current document tokens
-        document_char = torch.LongTensor([tokens[i][0] if len(tokens[i]) > 0 else '' for i in range(len(tokens))])
+        document_char = torch.LongTensor([char_dict[tokens[i][0]] if len(tokens[i]) > 0 else char_dict[''] for i in range(len(tokens))])
 
 
         # Check if selected sentence contains any answer span
@@ -426,9 +426,9 @@ def vectorize(ex, model, single_answer=False):
 
 def batchify(batch):
     """Gather a batch of individual examples into one batch."""
-    NUM_INPUTS = 6
+    NUM_INPUTS = 7
     NUM_TARGETS = 2
-    NUM_EXTRA = 2
+    NUM_EXTRA = 1
 
     docs = [ex[0] for ex in batch]
     doc_chars = [ex[1] for ex in batch]
