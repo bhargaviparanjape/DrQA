@@ -391,7 +391,7 @@ class SentenceSelector(object):
             scores_flat = scores.flatten()
             if top_n == 1:
                 idx_sort = [np.argmax(scores_flat)]
-            elif len(scores_flat) < top_n:
+            elif len(scores_flat) <= top_n:
                 idx_sort = np.argsort(-scores_flat)
             else:
                 idx = np.argpartition(-scores_flat, top_n)[0:top_n]

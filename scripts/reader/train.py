@@ -162,9 +162,9 @@ def add_train_args(parser):
                        default='glove.6B.300d.txt',
                        help='Space-separated pretrained embeddings file')
     files.add_argument('--adv-dev-file', type=str,
-                       action="append",
+                       action="append", default=[],
                        help='Preprocessed dev file')
-    files.add_argument('--adv-dev-json', type=str, action="append",
+    files.add_argument('--adv-dev-json', type=str, action="append", default=[],
                        help=('Unprocessed dev file to run validation '
                              'while training on'))
 

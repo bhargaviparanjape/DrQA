@@ -238,14 +238,16 @@ def vectorize(ex, model, single_answer=False):
             # Use gold sentence
             if len(ex['gold_sentence_ids']) == 0:
                 return []
-            top_sentence = [ex['gold_sentence_ids'][0]]
+            # At inference time, use all gold sentences
+            top_sentence = ex['gold_sentence_ids']
         else:
             ex_batch = sent_selector_batchify([sent_selector_vectorize(ex, model.sentence_selector, single_answer)])
 
             if args.dynamic_selector:
                 top_sentence = model.sentence_selector.predict(ex_batch, use_threshold = args.selection_threshold)[0]
             else:
-                top_sentence = model.sentence_selector.predict(ex_batch)[0]
+                # use K sentences
+                top_sentence = model.sentence_selector.predict(ex_batch, top_n = args.select_k)[0]
             #if len(ex['gold_sentence_ids']) > 0 and top_sentence not in ex['gold_sentence_ids']:
             #    return []
         # Extract top sentence and change ex["document"] accordingly
