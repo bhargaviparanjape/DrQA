@@ -16,7 +16,7 @@ MODEL_ARCHITECTURE = {
     'model_type', 'embedding_dim', 'char_embedding_dim', 'hidden_size', 'char_hidden_size',
     'doc_layers', 'question_layers', 'rnn_type', 'concat_rnn_layers', 'question_merge',
     'use_qemb', 'use_exact_match', 'use_pos', 'use_ner', 'use_lemma', 'use_tf', 'hop',
-    'use_sentence_selector', 'sentence_selector_model', 'use_gold_sentence'
+    'use_sentence_selector', 'use_gold_sentence', 'sentence_selector_model'
 }
 
 # Index of arguments concerning the model optimizer/training
