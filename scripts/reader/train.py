@@ -426,7 +426,8 @@ def validate_adversarial(args, model, global_stats, mode="dev"):
             dev_sampler = torch.utils.data.sampler.SequentialSampler(dev_dataset)
         if args.use_sentence_selector:
             dev_batcher = reader_vector.sentence_batchifier(model, single_answer=False)
-            batching_function = dev_batcher.batchify
+            #batching_function = dev_batcher.batchify
+            batching_function = reader_vector.batchify
         else:
             batching_function = reader_vector.batchify
         dev_loader = torch.utils.data.DataLoader(
@@ -625,7 +626,8 @@ def main(args):
         train_sampler = torch.utils.data.sampler.RandomSampler(train_dataset)
     if args.use_sentence_selector:
         train_batcher = reader_vector.sentence_batchifier(model, single_answer=True)
-        batching_function = train_batcher.batchify
+        # batching_function = train_batcher.batchify
+        batching_function = reader_vector.batchify
     else:
         batching_function = reader_vector.batchify
     train_loader = torch.utils.data.DataLoader(
@@ -647,7 +649,8 @@ def main(args):
 
     if args.use_sentence_selector:
         dev_batcher = reader_vector.sentence_batchifier(model, single_answer=False)
-        batching_function = dev_batcher.batchify
+        # batching_function = dev_batcher.batchify
+        batching_function = reader_vector.batchify
     else:
         batching_function = reader_vector.batchify
     dev_loader = torch.utils.data.DataLoader(
