@@ -12,15 +12,14 @@ import torch.nn.functional as F
 import numpy as np
 import logging
 import copy
-
+import sys
 from torch.autograd import Variable
 from config import override_model_args
 from r_net import R_Net
 from rnn_reader import RnnDocReader
 from m_reader import MnemonicReader
 from data import Dictionary
-sys.path.append('/home/ubuntu/bvp/DrQA/drqa/selector')
-from selector.model import SentenceSelector
+from drqa.selector.model import SentenceSelector
 
 logger = logging.getLogger(__name__)
 
@@ -275,6 +274,8 @@ class DocReader(object):
             self.optimizer = optim.Adadelta(parameters, lr=self.args.learning_rate,
                                             rho=self.args.rho, eps=self.args.eps,
                                             weight_decay=self.args.weight_decay)
+        elif self.args.optimizer == "adam":
+            self.optimizer = optim.Adam(parameters, lr=self.args.learning_rate)
         else:
             raise RuntimeError('Unsupported optimizer: %s' %
                                self.args.optimizer)

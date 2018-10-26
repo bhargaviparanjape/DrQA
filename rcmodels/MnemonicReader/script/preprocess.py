@@ -46,6 +46,7 @@ def tokenize(text):
         'pos': tokens.pos(),
         'lemma': tokens.lemmas(),
         'ner': tokens.entities(),
+        'sentence_boundaries': tokens.sentences(),
     }
     return output
 
@@ -123,6 +124,24 @@ def process_dataset(data, tokenizer, workers=None):
                                     ans['answer_start'] + len(ans['text']))
                 if found:
                     ans_tokens.append(found)
+
+        context_sentence_boundaries = c_tokens[data['qid2cid'][idx]]['sentence_boundaries']
+        ans_tokens_list = list(set(ans_tokens))
+        sentences = []
+        gold_sentence_ids = []
+        for s_idx, tup in enumerate(context_sentence_boundaries):
+            for a in ans_tokens_list:
+                if a[0] >= tup[0] and a[1] < tup[1]:
+                    gold_sentence_ids.append(s_idx)
+                elif a[0] >= tup[0] and a[0] < tup[1] and a[1] >= tup[1]:
+                    gold_sentence_ids.append(s_idx)
+                    gold_sentence_ids.append(s_idx+1)
+            sentence = document[tup[0]:tup[1]]
+            sentences.append(sentence)
+        gold_sentence_ids_set = list(set(gold_sentence_ids))
+        if len(ans_tokens_list) == 0:
+            print("No golden sentence available")
+
         yield {
             'id': data['qids'][idx],
             'question': question,
@@ -137,6 +156,8 @@ def process_dataset(data, tokenizer, workers=None):
             'clemma': clemma,
             'cpos': cpos,
             'cner': cner,
+            'sentences': sentences,
+            'gold_sentence_ids': gold_sentence_ids_set,
         }
 
 
@@ -148,7 +169,7 @@ def process_dataset(data, tokenizer, workers=None):
 parser = argparse.ArgumentParser()
 parser.add_argument('data_dir', type=str, help='Path to SQuAD data directory')
 parser.add_argument('out_dir', type=str, help='Path to output file dir')
-parser.add_argument('--split', type=str, help='Filename for train/dev split')
+parser.add_argument('--split', type=str, help='Filename for train/dev split', default="SQuAD-v1.1-dev")
 parser.add_argument('--num-workers', type=int, default=1)
 parser.add_argument('--tokenizer', type=str, default='spacy')
 parser.add_argument('--truncate', action="store_true", default=False)

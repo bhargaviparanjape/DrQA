@@ -424,12 +424,17 @@ def validate_adversarial(args, model, global_stats, mode="dev"):
                                                   shuffle=False)
         else:
             dev_sampler = torch.utils.data.sampler.SequentialSampler(dev_dataset)
+        if args.use_sentence_selector:
+            # batching_function = reader_vector.batchify_sentences
+            batching_function = reader_vector.batchify
+        else:
+            batching_function = reader_vector.batchify
         dev_loader = torch.utils.data.DataLoader(
             dev_dataset,
             batch_size=args.test_batch_size,
             sampler=dev_sampler,
             num_workers=args.data_workers,
-            collate_fn=reader_vector.batchify,
+            collate_fn=batching_function,
             pin_memory=args.cuda,
         )
 
@@ -618,12 +623,18 @@ def main(args):
                                                 shuffle=True)
     else:
         train_sampler = torch.utils.data.sampler.RandomSampler(train_dataset)
+    if args.use_sentence_selector:
+        train_batcher = reader_vector.sentence_batchifier(model, single_answer=True)
+        # batching_function = train_batcher.batchify
+        batching_function = reader_vector.batchify
+    else:
+        batching_function = reader_vector.batchify
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         sampler=train_sampler,
         num_workers=args.data_workers,
-        collate_fn=reader_vector.batchify,
+        collate_fn=batching_function,
         pin_memory=args.cuda,
     )
     dev_dataset = reader_data.ReaderDataset(dev_exs, model, single_answer=False)
@@ -634,12 +645,19 @@ def main(args):
                                               shuffle=False)
     else:
         dev_sampler = torch.utils.data.sampler.SequentialSampler(dev_dataset)
+
+    if args.use_sentence_selector:
+        dev_batcher = reader_vector.sentence_batchifier(model, single_answer=False)
+        # batching_function = dev_batcher.batchify
+        batching_function = reader_vector.batchify
+    else:
+        batching_function = reader_vector.batchify
     dev_loader = torch.utils.data.DataLoader(
         dev_dataset,
         batch_size=args.test_batch_size,
         sampler=dev_sampler,
         num_workers=args.data_workers,
-        collate_fn=reader_vector.batchify,
+        collate_fn=batching_function,
         pin_memory=args.cuda,
     )
     
@@ -691,7 +709,8 @@ def main(args):
             print("Sentence Selector model acheives:")
             print(sent_selector_results["accuracy"])
 
-        validate_adversarial(args, model, stats, mode="dev")
+        if len(args.adv_dev_json) > 0:
+            validate_adversarial(args, model, stats, mode="dev")
         exit(0)
 
 

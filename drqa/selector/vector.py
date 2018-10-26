@@ -97,7 +97,7 @@ def vectorize(ex, model, single_answer=False):
 
     # Maybe return without target
     if 'answers' not in ex:
-        return sentences, features, question, ex['id']
+        return sentences, sentence_lengths, features, question, ex['id']
 
     # ...or with target(s) (might still be empty if answers is empty)
     if single_answer:
@@ -111,64 +111,6 @@ def vectorize(ex, model, single_answer=False):
         gold_id = ex['gold_sentence_ids']
 
     return sentences, sentence_lengths, features, question, gold_id, ex['id']
-
-def batchify_sentences(batch):
-    NUM_INPUTS = 4
-    NUM_TARGETS = 1
-    NUM_EXTRA = 1
-
-    ids = [ex[-1] for ex in batch]
-    docs = [ex[0] for ex in batch]
-    doc_lengths = [ex[1] for ex in batch]
-    features = [ex[2] for ex in batch]
-    questions = [ex[3] for ex in batch]
-
-    # Batch documents and features
-    max_length = max([d.size(1) for d in docs])
-    sentence_lengths = [d.size(0) for d in docs]
-    max_sentences = max(sentence_lengths)
-    x1 = torch.LongTensor(len(docs), max_sentences, max_length).zero_()
-    x1_mask = torch.ByteTensor(len(docs), max_sentences, max_length).fill_(1)
-    x1_sent_mask = torch.FloatTensor(len(docs), max_sentences).zero_()
-
-    for i, d in enumerate(docs):
-        x1[i, :d.size(0), :d.size(1)].copy_(d)
-        for j, l in enumerate(doc_lengths[i]):
-            x1_mask[i, j, :l].fill_(0)
-        for j in range(sentence_lengths[i], max_sentences):
-            ## put some UNK token into the padded sentences and make thier length 1
-            x1[i, j, 0].fill_(1)
-            x1_mask[i, j, 0].fill_(0)
-            ## actual padding over sentences to be used in logsoftmax
-        x1_sent_mask[i, :sentence_lengths[i]].fill_(1)
-        ## add UNK to the empty dialogues
-
-    # Batch questions
-    max_length = max([q.size(0) for q in questions])
-    x2 = torch.LongTensor(len(questions), max_length).zero_()
-    x2_mask = torch.ByteTensor(len(questions), max_length).fill_(1)
-    for i, q in enumerate(questions):
-        x2[i, :q.size(0)].copy_(q)
-        x2_mask[i, :q.size(0)].fill_(0)
-
-    # Maybe return without targets
-    if len(batch[0]) == NUM_INPUTS + NUM_EXTRA:
-        return x1, None, x1_mask, x1_sent_mask, x2, x2_mask, ids
-
-    elif len(batch[0]) == NUM_INPUTS + NUM_EXTRA + NUM_TARGETS:
-        # ...Otherwise add targets
-        if torch.is_tensor(batch[0][4]):
-            # y_s = torch.cat([ex[3] for ex in batch])
-            # y_e = torch.cat([ex[4] for ex in batch])
-            y_g = torch.cat([ex[4] for ex in batch])
-        else:
-            # y_s = [ex[3] for ex in batch]
-            # y_e = [ex[4] for ex in batch]
-            y_g = [ex[4] for ex in batch]
-    else:
-        raise RuntimeError('Incorrect number of inputs per example.')
-
-    return x1, None, x1_mask, x1_sent_mask, x2, x2_mask, y_g, ids
 
 def batchify(batch):
     """Gather a batch of individual examples into one batch."""
@@ -225,10 +167,12 @@ def batchify(batch):
         if torch.is_tensor(batch[0][4]):
             # y_s = torch.cat([ex[3] for ex in batch])
             # y_e = torch.cat([ex[4] for ex in batch])
+            # List of tensors
             y_g = torch.cat([ex[4] for ex in batch])
         else:
             # y_s = [ex[3] for ex in batch]
             # y_e = [ex[4] for ex in batch]
+            # List of lists
             y_g = [ex[4] for ex in batch]
     else:
         raise RuntimeError('Incorrect number of inputs per example.')

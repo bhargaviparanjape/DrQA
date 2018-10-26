@@ -1,0 +1,103 @@
+10/25/2018 05:21:08 PM: [ COMMAND: /home/bhargavi/robust_nlp/invariance/DrQA/rcmodels/MnemonicReader/script/train.py --model-type mnemonic --data-dir /home/bhargavi/robust_nlp/invariance/DrQA/rcmodels/MnemonicReader/dataset/ --embed-dir /home/bhargavi/robust_nlp/invariance/DrQA/data/embeddings/ --embedding-file glove.6B.300d.txt --char-embedding-file glove.840B.300d-char.txt --model-dir /home/bhargavi/robust_nlp/invariance/DrQA/rcmodels/MnemonicReader/output/ --model-name oracle --model-type rnn --hidden-size 50 --doc-layers 1 --question-layers 1 --num-epochs 10 --learning-rate 0.00001 --batch-size 16 --optimizer adam --learning-rate 1e-4 --display-iter 25 --dropout-emb 0.2 --use_sentence_selector --use_gold_sentence --sentence_selector_model /home/bhargavi/robust_nlp/invariance/DrQA/output/sentence_selector.mdl ]
+10/25/2018 05:21:08 PM: [ ---------------------------------------------------------------------------------------------------- ]
+10/25/2018 05:21:08 PM: [ Load data files ]
+10/25/2018 05:21:08 PM: [ Num train examples = 129 ]
+10/25/2018 05:21:08 PM: [ Num dev examples = 180 ]
+10/25/2018 05:21:08 PM: [ ---------------------------------------------------------------------------------------------------- ]
+10/25/2018 05:21:08 PM: [ Training model from scratch... ]
+10/25/2018 05:21:08 PM: [ ---------------------------------------------------------------------------------------------------- ]
+10/25/2018 05:21:08 PM: [ Generate features ]
+10/25/2018 05:21:09 PM: [ Num features = 61 ]
+10/25/2018 05:21:09 PM: [ {'in_cased': 0, 'in_uncased': 1, 'in_lemma': 2, 'pos=RB': 3, 'pos=,': 4, 'pos=DT': 5, 'pos=NN': 6, 'pos=VBZ': 7, 'pos=JJ': 8, 'pos=.': 9, 'pos=IN': 10, 'pos=NNP': 11, 'pos=POS': 12, 'pos=CC': 13, 'pos=VBG': 14, 'pos=PRP': 15, 'pos=NNS': 16, 'pos=VBN': 17, 'pos=``': 18, 'pos=NNPS': 19, "pos=''": 20, 'pos=WRB': 21, 'pos=VBD': 22, 'pos=CD': 23, 'pos=-LRB-': 24, 'pos=WDT': 25, 'pos=-RRB-': 26, 'pos=TO': 27, 'pos=WP': 28, 'pos=VBP': 29, 'pos=JJS': 30, 'pos=HYPH': 31, 'pos=VB': 32, 'pos=PDT': 33, 'pos=:': 34, 'pos=PRP$': 35, 'pos=RP': 36, 'pos=RBS': 37, 'pos=': 38, 'pos=JJR': 39, 'pos=MD': 40, 'pos=SYM': 41, 'pos=RBR': 42, 'ner=': 43, 'ner=NORP': 44, 'ner=FAC': 45, 'ner=PERSON': 46, 'ner=ORG': 47, 'ner=GPE': 48, 'ner=DATE': 49, 'ner=CARDINAL': 50, 'ner=LOC': 51, 'ner=WORK_OF_ART': 52, 'ner=PRODUCT': 53, 'ner=EVENT': 54, 'ner=ORDINAL': 55, 'ner=QUANTITY': 56, 'ner=LAW': 57, 'ner=TIME': 58, 'ner=PERCENT': 59, 'tf': 60} ]
+10/25/2018 05:21:09 PM: [ ---------------------------------------------------------------------------------------------------- ]
+10/25/2018 05:21:09 PM: [ Build word dictionary ]
+10/25/2018 05:21:09 PM: [ Restricting to words in /home/bhargavi/robust_nlp/invariance/DrQA/data/embeddings/glove.6B.300d.txt ]
+10/25/2018 05:21:15 PM: [ Num words in set = 400000 ]
+10/25/2018 05:21:15 PM: [ Num words = 1392 ]
+10/25/2018 05:21:15 PM: [ ---------------------------------------------------------------------------------------------------- ]
+10/25/2018 05:21:15 PM: [ Build char dictionary ]
+10/25/2018 05:21:15 PM: [ Restricting to chars in /home/bhargavi/robust_nlp/invariance/DrQA/data/embeddings/glove.840B.300d-char.txt ]
+10/25/2018 05:21:15 PM: [ Num chars in set = 94 ]
+10/25/2018 05:21:15 PM: [ Num chars = 74 ]
+10/25/2018 05:21:15 PM: [ Loading model /home/bhargavi/robust_nlp/invariance/DrQA/output/sentence_selector.mdl ]
+10/25/2018 05:21:15 PM: [ Loading pre-trained embeddings for 1390 words from /home/bhargavi/robust_nlp/invariance/DrQA/data/embeddings/glove.6B.300d.txt ]
+10/25/2018 05:21:22 PM: [ Loaded 1390 embeddings (100.00%) ]
+10/25/2018 05:21:22 PM: [ Loading pre-trained embeddings for 72 chars from /home/bhargavi/robust_nlp/invariance/DrQA/data/embeddings/glove.840B.300d-char.txt ]
+10/25/2018 05:21:22 PM: [ Loaded 72 char embeddings (100.00%) ]
+10/25/2018 05:21:22 PM: [ ---------------------------------------------------------------------------------------------------- ]
+10/25/2018 05:21:22 PM: [ Make data loaders ]
+10/25/2018 05:21:22 PM: [ ---------------------------------------------------------------------------------------------------- ]
+10/25/2018 05:21:22 PM: [ CONFIG:
+{
+    "adv_dev_file":null,
+    "adv_dev_json":null,
+    "batch_size":16,
+    "char_embedding_dim":300,
+    "char_embedding_file":"\/home\/bhargavi\/robust_nlp\/invariance\/DrQA\/data\/embeddings\/glove.840B.300d-char.txt",
+    "char_hidden_size":50,
+    "checkpoint":false,
+    "concat_rnn_layers":true,
+    "cuda":false,
+    "data_dir":"\/home\/bhargavi\/robust_nlp\/invariance\/DrQA\/rcmodels\/MnemonicReader\/dataset\/",
+    "data_workers":1,
+    "dev_file":"\/home\/bhargavi\/robust_nlp\/invariance\/DrQA\/rcmodels\/MnemonicReader\/dataset\/SQuAD-v1.1-dev-processed-spacy.txt",
+    "dev_json":"\/home\/bhargavi\/robust_nlp\/invariance\/DrQA\/rcmodels\/MnemonicReader\/dataset\/SQuAD-v1.1-dev.json",
+    "display_iter":25,
+    "doc_layers":1,
+    "dropout_emb":0.2,
+    "dropout_rnn":0.2,
+    "dropout_rnn_output":true,
+    "dynamic_selector":false,
+    "embed_dir":"\/home\/bhargavi\/robust_nlp\/invariance\/DrQA\/data\/embeddings\/",
+    "embedding_dim":300,
+    "embedding_file":"\/home\/bhargavi\/robust_nlp\/invariance\/DrQA\/data\/embeddings\/glove.6B.300d.txt",
+    "eps":0.000001,
+    "expand_dictionary":false,
+    "fix_embeddings":true,
+    "global_mode":"train",
+    "gpu":-1,
+    "grad_clipping":10,
+    "hidden_size":50,
+    "hop":2,
+    "learning_rate":0.0001,
+    "log_file":"\/home\/bhargavi\/robust_nlp\/invariance\/DrQA\/rcmodels\/MnemonicReader\/output\/oracle.txt",
+    "max_len":15,
+    "model_dir":"\/home\/bhargavi\/robust_nlp\/invariance\/DrQA\/rcmodels\/MnemonicReader\/output\/",
+    "model_file":"\/home\/bhargavi\/robust_nlp\/invariance\/DrQA\/rcmodels\/MnemonicReader\/output\/oracle.mdl",
+    "model_name":"oracle",
+    "model_type":"rnn",
+    "momentum":0,
+    "no_cuda":false,
+    "num_epochs":10,
+    "official_eval":true,
+    "optimizer":"adam",
+    "parallel":false,
+    "pretrained":"",
+    "question_layers":1,
+    "question_merge":"self_attn",
+    "random_seed":1013,
+    "restrict_vocab":true,
+    "rho":0.95,
+    "rnn_padding":false,
+    "rnn_type":"lstm",
+    "selection_threshold":0.95,
+    "sentence_selector_model":"\/home\/bhargavi\/robust_nlp\/invariance\/DrQA\/output\/sentence_selector.mdl",
+    "sort_by_len":true,
+    "test_batch_size":32,
+    "train_file":"\/home\/bhargavi\/robust_nlp\/invariance\/DrQA\/rcmodels\/MnemonicReader\/dataset\/SQuAD-v1.1-train-processed-spacy.txt",
+    "tune_partial":0,
+    "uncased_doc":false,
+    "uncased_question":false,
+    "use_exact_match":true,
+    "use_gold_sentence":true,
+    "use_lemma":true,
+    "use_ner":true,
+    "use_pos":true,
+    "use_qemb":true,
+    "use_sentence_selector":true,
+    "use_tf":true,
+    "valid_metric":"exact_match",
+    "weight_decay":0
+} ]
+10/25/2018 05:21:22 PM: [ ---------------------------------------------------------------------------------------------------- ]
+10/25/2018 05:21:22 PM: [ Starting training... ]
