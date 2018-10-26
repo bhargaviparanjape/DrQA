@@ -16,6 +16,7 @@ import copy
 from torch.autograd import Variable
 from .config import override_model_args
 from .rnn_reader import RnnDocReader
+from .mnemonic_reader import MnemonicReader
 from ..selector.model import SentenceSelector
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,8 @@ class DocReader(object):
         # 0-1 per paragraph (no softmax).
         if args.model_type == 'rnn':
             self.network = RnnDocReader(args, normalize)
+        elif args.model_type == 'mnemonic':
+            self.network = MnemonicReader(args, normalize)
         else:
             raise RuntimeError('Unsupported model: %s' % args.model_type)
 
@@ -261,6 +264,36 @@ class DocReader(object):
             offset = embedding.size(0) - fixed_embedding.size(0)
             if offset >= 0:
                 embedding[offset:] = fixed_embedding
+
+    def predict_probs(self, ex, candidates=None, top_n=1, async_pool=None):
+        self.network.eval()
+
+        # Transfer to GPU
+        if self.use_cuda:
+            inputs = [e if e is None else
+                      Variable(e.cuda(async=True), volatile=True)
+                      for e in ex[:5]]
+        else:
+            inputs = [e if e is None else Variable(e, volatile=True)
+                      for e in ex[:5]]
+
+        # Run forward
+        score_s, score_e = self.network(*inputs)
+        # Decode predictions
+        score_s = score_s.data.cpu()
+        score_e = score_e.data.cpu()
+        if candidates:
+            args = (score_s, score_e, candidates, top_n, self.args.max_len)
+            if async_pool:
+                return async_pool.apply_async(self.decode_candidates, args), score_s, score_e
+            else:
+                return self.decode_candidates(*args), score_s, score_e
+        else:
+            args = (score_s, score_e, top_n, self.args.max_len)
+            if async_pool:
+                return async_pool.apply_async(self.decode, args), score_s, score_e
+            else:
+                return self.decode(*args), score_s, score_e
 
     # --------------------------------------------------------------------------
     # Prediction

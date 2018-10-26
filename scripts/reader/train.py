@@ -17,7 +17,7 @@ from os.path import dirname, realpath
 import numpy as np
 import torch
 
-sys.path.append(dirname(dirname(dirname(realpath(__file__)))))
+sys.path.insert(0, dirname(dirname(dirname(realpath(__file__)))))
 from drqa.reader import utils, config
 from drqa.reader import data as reader_data, vector as reader_vector
 from drqa.selector import data as selector_data, vector as selector_vector
@@ -41,6 +41,75 @@ EMBED_DIR = os.path.join(DRQA_DATA, 'embeddings')
 
 def str2bool(v):
     return v.lower() in ('yes', 'true', 't', '1', 'y')
+
+
+def set_defaults(args):
+    """Make sure the commandline arguments are initialized properly."""
+    # Check critical files exist
+    args.dev_json = os.path.join(args.data_dir, args.dev_json)
+    if not os.path.isfile(args.dev_json):
+        raise IOError('No such file: %s' % args.dev_json)
+    train_files = []
+    for t_file in args.train_file:
+        fullpath = os.path.join(args.data_dir, t_file)
+        train_files.append(fullpath)
+    vars(args)["train_file"] = train_files
+    args.dev_file = os.path.join(args.data_dir, args.dev_file)
+    if not os.path.isfile(args.dev_file):
+        raise IOError('No such file: %s' % args.dev_file)
+
+    # Adversarial files
+
+    if args.adv_dev_file is not None and args.adv_dev_json is not None:
+        adv_dev_files = []
+        for t_file in args.adv_dev_file:
+            fullpath = os.path.join(args.data_dir, t_file)
+            adv_dev_files.append(fullpath)
+        vars(args)["adv_dev_file"] = adv_dev_files
+        adv_dev_json = []
+        for t_file in args.adv_dev_json:
+            fullpath = os.path.join(args.data_dir, t_file)
+            adv_dev_json.append(fullpath)
+        vars(args)["adv_dev_json"] = adv_dev_json
+
+    if args.embedding_file:
+        args.embedding_file = os.path.join(args.embed_dir, args.embedding_file)
+        if not os.path.isfile(args.embedding_file):
+            raise IOError('No such file: %s' % args.embedding_file)
+    # Set model directory
+    subprocess.call(['mkdir', '-p', args.model_dir])
+
+    # Set model name
+    if not args.model_name:
+        import uuid
+        import time
+        args.model_name = time.strftime("%Y%m%d-") + str(uuid.uuid4())[:8]
+
+    # Set log + model file names
+    args.log_file = os.path.join(args.model_dir, args.model_name + '.txt')
+    args.model_file = os.path.join(args.model_dir, args.model_name + '.mdl')
+
+    # Embeddings options
+    if args.embedding_file:
+        with open(args.embedding_file) as f:
+            dim = len(f.readline().strip().split(' ')) - 1
+        args.embedding_dim = dim
+    elif not args.embedding_dim:
+        raise RuntimeError('Either embedding_file or embedding_dim '
+                           'needs to be specified.')
+
+    # Make sure tune_partial and fix_embeddings are consistent.
+    if args.tune_partial > 0 and args.fix_embeddings:
+        logger.warning('WARN: fix_embeddings set to False as tune_partial > 0.')
+        args.fix_embeddings = False
+
+    # Make sure fix_embeddings and embedding_file are consistent
+    if args.fix_embeddings:
+        if not (args.embedding_file or args.pretrained):
+            logger.warning('WARN: fix_embeddings set to False '
+                           'as embeddings are random.')
+            args.fix_embeddings = False
+    return args
 
 
 def add_train_args(parser):
@@ -127,75 +196,6 @@ def add_train_args(parser):
                          help='Log state after every <display_iter> epochs')
     general.add_argument('--sort-by-len', type='bool', default=True,
                          help='Sort batches by length for speed')
-
-
-def set_defaults(args):
-    """Make sure the commandline arguments are initialized properly."""
-    # Check critical files exist
-    args.dev_json = os.path.join(args.data_dir, args.dev_json)
-    if not os.path.isfile(args.dev_json):
-        raise IOError('No such file: %s' % args.dev_json)
-    train_files = []
-    for t_file in args.train_file:
-        fullpath = os.path.join(args.data_dir, t_file)
-        train_files.append(fullpath)
-    vars(args)["train_file"] = train_files
-    args.dev_file = os.path.join(args.data_dir, args.dev_file)
-    if not os.path.isfile(args.dev_file):
-        raise IOError('No such file: %s' % args.dev_file)
-
-    # Adversarial files
-
-    if args.adv_dev_file is not None and args.adv_dev_json is not None:
-        adv_dev_files = []
-        for t_file in args.adv_dev_file:
-            fullpath = os.path.join(args.data_dir, t_file)
-            adv_dev_files.append(fullpath)
-        vars(args)["adv_dev_file"] = adv_dev_files
-        adv_dev_json = []
-        for t_file in args.adv_dev_json:
-            fullpath = os.path.join(args.data_dir, t_file)
-            adv_dev_json.append(fullpath)
-        vars(args)["adv_dev_json"] = adv_dev_json
-
-    if args.embedding_file:
-        args.embedding_file = os.path.join(args.embed_dir, args.embedding_file)
-        if not os.path.isfile(args.embedding_file):
-            raise IOError('No such file: %s' % args.embedding_file)
-    # Set model directory
-    subprocess.call(['mkdir', '-p', args.model_dir])
-
-    # Set model name
-    if not args.model_name:
-        import uuid
-        import time
-        args.model_name = time.strftime("%Y%m%d-") + str(uuid.uuid4())[:8]
-
-    # Set log + model file names
-    args.log_file = os.path.join(args.model_dir, args.model_name + '.txt')
-    args.model_file = os.path.join(args.model_dir, args.model_name + '.mdl')
-
-    # Embeddings options
-    if args.embedding_file:
-        with open(args.embedding_file) as f:
-            dim = len(f.readline().strip().split(' ')) - 1
-        args.embedding_dim = dim
-    elif not args.embedding_dim:
-        raise RuntimeError('Either embedding_file or embedding_dim '
-                           'needs to be specified.')
-
-    # Make sure tune_partial and fix_embeddings are consistent.
-    if args.tune_partial > 0 and args.fix_embeddings:
-        logger.warning('WARN: fix_embeddings set to False as tune_partial > 0.')
-        args.fix_embeddings = False
-
-    # Make sure fix_embeddings and embedding_file are consistent
-    if args.fix_embeddings:
-        if not (args.embedding_file or args.pretrained):
-            logger.warning('WARN: fix_embeddings set to False '
-                           'as embeddings are random.')
-            args.fix_embeddings = False
-    return args
 
 
 # ------------------------------------------------------------------------------
@@ -313,6 +313,7 @@ def validate_official(args, data_loader, model, global_stats,
         texts: Map of qid --> raw text of examples context (matches offsets).
         answers: Map of qid --> list of accepted answers.
     """
+    clean_id_file = open(os.path.join(DATA_DIR, "clean_qids.txt"), "w+")
     eval_time = utils.Timer()
     f1 = utils.AverageMeter()
     exact_match = utils.AverageMeter()
@@ -344,8 +345,16 @@ def validate_official(args, data_loader, model, global_stats,
             f1.update(utils.metric_max_over_ground_truths(
                 utils.f1_score, prediction, ground_truths))
 
+            f1_example = utils.metric_max_over_ground_truths(
+                utils.f1_score, prediction, ground_truths)
+
+            if f1_example != 0:
+                clean_id_file.write(ex_id[i] + "\n")
+
+
         examples += batch_size
 
+    clean_id_file.close()
     logger.info('dev valid official: Epoch = %d | EM = %.2f | ' %
                 (global_stats['epoch'], exact_match.avg * 100) +
                 'F1 = %.2f | examples = %d | valid time = %.2f (s)' %
@@ -415,12 +424,17 @@ def validate_adversarial(args, model, global_stats, mode="dev"):
                                                   shuffle=False)
         else:
             dev_sampler = torch.utils.data.sampler.SequentialSampler(dev_dataset)
+        if args.use_sentence_selector:
+            # batching_function = reader_vector.batchify_sentences
+            batching_function = reader_vector.batchify
+        else:
+            batching_function = reader_vector.batchify
         dev_loader = torch.utils.data.DataLoader(
             dev_dataset,
             batch_size=args.test_batch_size,
             sampler=dev_sampler,
             num_workers=args.data_workers,
-            collate_fn=reader_vector.batchify,
+            collate_fn=batching_function,
             pin_memory=args.cuda,
         )
 
@@ -609,12 +623,18 @@ def main(args):
                                                 shuffle=True)
     else:
         train_sampler = torch.utils.data.sampler.RandomSampler(train_dataset)
+    if args.use_sentence_selector:
+        train_batcher = reader_vector.sentence_batchifier(model, single_answer=True)
+        # batching_function = train_batcher.batchify
+        batching_function = reader_vector.batchify
+    else:
+        batching_function = reader_vector.batchify
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         sampler=train_sampler,
         num_workers=args.data_workers,
-        collate_fn=reader_vector.batchify,
+        collate_fn=batching_function,
         pin_memory=args.cuda,
     )
     dev_dataset = reader_data.ReaderDataset(dev_exs, model, single_answer=False)
@@ -625,12 +645,19 @@ def main(args):
                                               shuffle=False)
     else:
         dev_sampler = torch.utils.data.sampler.SequentialSampler(dev_dataset)
+
+    if args.use_sentence_selector:
+        dev_batcher = reader_vector.sentence_batchifier(model, single_answer=False)
+        # batching_function = dev_batcher.batchify
+        batching_function = reader_vector.batchify
+    else:
+        batching_function = reader_vector.batchify
     dev_loader = torch.utils.data.DataLoader(
         dev_dataset,
         batch_size=args.test_batch_size,
         sampler=dev_sampler,
         num_workers=args.data_workers,
-        collate_fn=reader_vector.batchify,
+        collate_fn=batching_function,
         pin_memory=args.cuda,
     )
     
@@ -682,7 +709,8 @@ def main(args):
             print("Sentence Selector model acheives:")
             print(sent_selector_results["accuracy"])
 
-        validate_adversarial(args, model, stats, mode="dev")
+        if len(args.adv_dev_json) > 0:
+            validate_adversarial(args, model, stats, mode="dev")
         exit(0)
 
 

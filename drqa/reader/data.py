@@ -110,7 +110,6 @@ class ReaderDataset(Dataset):
 
 
 class SortedBatchSampler(Sampler):
-
     def __init__(self, lengths, batch_size, shuffle=True):
         self.lengths = lengths
         self.batch_size = batch_size

@@ -2,14 +2,14 @@
 set -eu -o pipefail
 
 ### GloVe vectors ###
-if [ ! -d glove ]
-then
-  mkdir glove
-  cd glove
-  wget http://nlp.stanford.edu/data/glove.6B.zip
-  unzip glove.6B.zip
-  cd ..
-fi
+#if [ ! -d glove ]
+#then
+#  mkdir glove
+#  cd glove
+#  wget http://nlp.stanford.edu/data/glove.6B.zip
+#  unzip glove.6B.zip
+#  cd ..
+#fi
 
 ### SQuAD ###
 mkdir -p data
@@ -25,11 +25,11 @@ fi
 cd ..
 
 ### nectar
-if [ ! -d "nectar" ]
-then
-  git clone https://github.com/robinjia/nectar.git
-  cd nectar 
-  ./pull_dependencies.sh
-  cd ..
-  ln -s ../../nectar/nectar src/py
-fi
+#if [ ! -d "nectar" ]
+#then
+#  git clone https://github.com/robinjia/nectar.git
+#  cd nectar 
+#  ./pull_dependencies.sh
+#  cd ..
+#  ln -s ../../nectar/nectar src/py
+#fi
