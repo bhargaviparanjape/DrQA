@@ -11,7 +11,7 @@ import logging
 import unicodedata
 
 from torch.utils.data import Dataset
-from torch.utils.data.sampler import Sampler, BatchSampler
+from torch.utils.data.sampler import Sampler
 from .vector import vectorize
 
 logger = logging.getLogger(__name__)
@@ -99,15 +99,16 @@ class SentenceSelectorDataset(Dataset):
         return vectorize(self.examples[index], self.model, self.single_answer)
 
     def lengths(self):
-        return [(len(ex['sentences']), max([len(s) for s in ex['sentences']]), len(ex['question']))
+        return [(len(ex['sentences']), len(ex['question']))
                 for ex in self.examples]
+
 
 # ------------------------------------------------------------------------------
 # PyTorch sampler returning batched of sorted lengths (by doc and question).
 # ------------------------------------------------------------------------------
 
 
-class SortedBatchSampler(BatchSampler):
+class SortedBatchSampler(Sampler):
 
     def __init__(self, lengths, batch_size, shuffle=True):
         self.lengths = lengths
@@ -116,27 +117,15 @@ class SortedBatchSampler(BatchSampler):
 
     def __iter__(self):
         lengths = np.array(
-            [(-l[0], -l[1], -l[2], np.random.random()) for l in self.lengths],
-            dtype=[('l1', np.int_), ('l2', np.int_), ('l3', np.int_), ('rand', np.float_)]
+            [(-l[0], -l[1], np.random.random()) for l in self.lengths],
+            dtype=[('l1', np.int_), ('l2', np.int_), ('rand', np.float_)]
         )
-        # if self.shuffle:
-        #     np.random.shuffle(lengths)
-        # indices = np.argsort(lengths, order=('l1', 'l2', 'rand'))
-        indices = []
-        MAX_BATCH_CONTENT = 1000
-        start = 0
-        current_size = 0
-        for i in range(len(lengths)):
-            current_size += lengths[i][0]*lengths[i][1]
-            if current_size > MAX_BATCH_CONTENT:
-                indices.append((start, i))
-                current_size = 0
-                start = i
-
-        batches = [list(range(i[0], i[1])) for i in indices]
+        indices = np.argsort(lengths, order=('l1', 'l2', 'rand'))
+        batches = [indices[i:i + self.batch_size]
+                   for i in range(0, len(indices), self.batch_size)]
         if self.shuffle:
             np.random.shuffle(batches)
-        return iter(batches)
+        return iter([i for batch in batches for i in batch])
 
     def __len__(self):
         return len(self.lengths)
