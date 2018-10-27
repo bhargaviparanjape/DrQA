@@ -259,7 +259,7 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
     attacked = 0
     for ex in data_loader:
         batch_size = ex[0].size(0)
-        pred = model.predict(ex, top_n=3)
+        pred = model.predict(ex, top_n=args.select_k)
         target = ex[-2:-1]
 
 
@@ -309,7 +309,7 @@ def validate_official(args, data_loader, model, global_stats,
     examples = 0
     for ex in data_loader:
         ex_id, batch_size = ex[-1], ex[0].size(0)
-        pred_s, pred_e, _ = model.predict(ex, top_n=3)
+        pred_s, pred_e, _ = model.predict(ex)
 
         for i in range(batch_size):
             s_offset = offsets[ex_id[i]][pred_s[i][0]][0]
