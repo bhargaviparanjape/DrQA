@@ -476,8 +476,9 @@ def main(args):
         train_sampler = torch.utils.data.sampler.RandomSampler(train_dataset)
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
-        batch_size=args.batch_size,
-        sampler=train_sampler,
+        # batch_size=args.batch_size,
+        # sampler=train_sampler,
+        batch_sampler = train_sampler,
         num_workers=args.data_workers,
         collate_fn=vector.batchify,
         pin_memory=args.cuda,
@@ -491,8 +492,9 @@ def main(args):
         dev_sampler = torch.utils.data.sampler.SequentialSampler(dev_dataset)
     dev_loader = torch.utils.data.DataLoader(
         dev_dataset,
-        batch_size=args.test_batch_size,
-        sampler=dev_sampler,
+        # batch_size=args.test_batch_size,
+        # sampler=dev_sampler,
+        batch_sampler=train_sampler,
         num_workers=args.data_workers,
         collate_fn=vector.batchify,
         pin_memory=args.cuda,
