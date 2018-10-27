@@ -12,7 +12,6 @@ import torch.nn.functional as F
 import numpy as np
 import logging
 import copy
-from tensorboardX import SummaryWriter
 from torch.autograd import Variable
 from .config import override_model_args
 from .rnn_selector import RnnSentSelector
