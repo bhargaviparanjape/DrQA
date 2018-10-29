@@ -47,6 +47,7 @@ DATASETS = {
 		'sample1k': 'out/none_n1000_k1_s0.json',
 		'train': 'data/squad/train-v1.1.json',
 }
+
 CORENLP_CACHES = {
 		'dev': 'data/squad/corenlp_cache.json',
 		'sample1k': 'data/squad/corenlp_cache.json',
@@ -459,8 +460,7 @@ def get_qas(dataset):
 		for paragraph in article['paragraphs']:
 			for qa in paragraph['qas']:
 				question = qa['question'].strip()
-				answers = sorted(qa['answers'],
-												 key=lambda x: len(x['text']))  # Prefer shorter answers
+				answers = sorted(qa['answers'], key=lambda x: len(x['text']))  # Prefer shorter answers
 				qas.append((question, answers, paragraph['context']))
 	return qas
 
@@ -1336,7 +1336,7 @@ def main():
 	elif OPTS.command == 'alter-all':
 		alter_questions(qas, alteration_strategy='all')
 	elif OPTS.command == 'gen-a':
-	 generate_answers(qas)
+		generate_answers(qas)
 	elif OPTS.command == 'e2e-lies':
 		run_end2end(qas)
 	elif OPTS.command == 'e2e-highConf':
@@ -1359,4 +1359,3 @@ def main():
 if __name__ == '__main__':
 	OPTS = parse_args()
 	main()
-
