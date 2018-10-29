@@ -45,14 +45,14 @@ PATTERN_TENSES = ['inf', '3sg', 'p', 'part', 'ppart', '1sg']
 DATASETS = {
 		'dev': 'data/squad/dev-v1.1.json',
 		'sample1k': 'out/none_n1000_k1_s0.json',
-		'train': 'data/squad/train-v1.1.json',
+		'train': 'data/newsqa/train.json',
 }
 CORENLP_CACHES = {
 		'dev': 'data/squad/corenlp_cache.json',
 		'sample1k': 'data/squad/corenlp_cache.json',
-		'train': 'data/squad/train_corenlp_cache.json',
+		'train': 'data/newsqa/corenlp_train_new.json',
 }
-NEARBY_GLOVE_FILE = 'out/nearby_n100_glove_6B_100d.json'
+NEARBY_GLOVE_FILE = 'out/nearby_n100_glove_6B_100d_new.json'
 POSTAG_FILE = 'data/postag_dict.json'
 CORENLP_LOG = 'corenlp.log'
 CORENLP_PORT = 8101
@@ -1236,7 +1236,8 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 												token['characterOffsetEnd']) for token in tokens]
 									# Usually these token offsets are marked perfectly
 									sentence_lengths = [len(" ".join(s)) for s in sentences]
-									# Pick a random position to insert the sentence
+								        # Pick a random position to insert the sentence
+									for do in range(4):
 									insert_position = numpy.random.randint(len(sentences) + 1)
 									added_tokens = [token for s in client.query_ner(sent)["sentences"] for token in s['tokens']]
 									added_offsets = [(token['characterOffsetBegin'],
