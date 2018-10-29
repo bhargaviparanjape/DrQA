@@ -295,7 +295,7 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
     for ex in data_loader:
         batch_size = ex[0].size(0)
         pred_s, pred_e, _ = model.predict(ex)
-        target_s, target_e = ex[-3:-1]
+        target_s, target_e = ex[-4:-2]
 
         # We get metrics for independent start/end and joint start/end
         accuracies = eval_accuracies(pred_s, target_s, pred_e, target_e)
@@ -391,6 +391,7 @@ def eval_accuracies(pred_s, target_s, pred_e, target_e):
 
         # End matches
         if pred_e[i] in target_e[i]:
+
             end.update(1)
         else:
             end.update(0)
@@ -426,10 +427,10 @@ def validate_adversarial(args, model, global_stats, mode="dev"):
                                                   shuffle=False)
         else:
             dev_sampler = torch.utils.data.sampler.SequentialSampler(dev_dataset)
-        if args.use_sentence_selector:
-            batching_function = vector.batchify_sentences
-        else:
-            batching_function = vector.batchify
+        # if args.use_sentence_selector:
+        #     batching_function = vector.batchify_sentences
+        # else:
+        batching_function = vector.batchify
         dev_loader = torch.utils.data.DataLoader(
             dev_dataset,
             batch_size=args.test_batch_size,
@@ -622,11 +623,11 @@ def main(args):
                                                 shuffle=True)
     else:
         train_sampler = torch.utils.data.sampler.RandomSampler(train_dataset)
-    if args.use_sentence_selector:
-        train_batcher = vector.sentence_batchifier(model, single_answer=True)
-        batching_function = train_batcher.batchify
-    else:
-        batching_function = vector.batchify
+    # if args.use_sentence_selector:
+    #     train_batcher = vector.sentence_batchifier(model, single_answer=True)
+    #     batching_function = train_batcher.batchify
+    # else:
+    batching_function = vector.batchify
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=args.batch_size,
@@ -642,11 +643,11 @@ def main(args):
                                               shuffle=False)
     else:
         dev_sampler = torch.utils.data.sampler.SequentialSampler(dev_dataset)
-    if args.use_sentence_selector:
-        dev_batcher = vector.sentence_batchifier(model, single_answer=False)
-        batching_function = dev_batcher.batchify
-    else:
-        batching_function = vector.batchify
+    # if args.use_sentence_selector:
+    #     dev_batcher = vector.sentence_batchifier(model, single_answer=False)
+    #     batching_function = dev_batcher.batchify
+    # else:
+    batching_function = vector.batchify
     dev_loader = torch.utils.data.DataLoader(
         dev_dataset,
         batch_size=args.test_batch_size,

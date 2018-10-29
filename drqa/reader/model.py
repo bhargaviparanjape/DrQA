@@ -229,6 +229,7 @@ class DocReader(object):
         score_s, score_e = self.network(*inputs)
 
         # Compute loss and accuracies
+        # assertion error problems
         loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
 
         # Clear gradients and run backward

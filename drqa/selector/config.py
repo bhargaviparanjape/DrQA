@@ -48,6 +48,7 @@ def add_model_args(parser):
     model.add_argument('--rnn-type', type=str, default='lstm',
                        help='RNN type: LSTM, GRU, or RNN')
     model.add_argument('--clean-dataset', default=False, action="store_true")
+    model.add_argument('--select_k', type=int, default=1)
 
     # Model specific details
     detail = parser.add_argument_group('DrQA Reader Model Details')

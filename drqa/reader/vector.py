@@ -239,14 +239,16 @@ def vectorize(ex, model, single_answer=False):
             # Use gold sentence
             if len(ex['gold_sentence_ids']) == 0:
                 return []
-            top_sentence = [ex['gold_sentence_ids'][0]]
+            # At inference time, use all gold sentences
+            top_sentence = ex['gold_sentence_ids']
         else:
             ex_batch = sent_selector_batchify([sent_selector_vectorize(ex, model.sentence_selector, single_answer)])
 
             if args.dynamic_selector:
                 top_sentence = model.sentence_selector.predict(ex_batch, use_threshold = args.selection_threshold)[0]
             else:
-                top_sentence = model.sentence_selector.predict(ex_batch)[0]
+                # use K sentences
+                top_sentence = model.sentence_selector.predict(ex_batch, top_n = args.select_k)[0]
             #if len(ex['gold_sentence_ids']) > 0 and top_sentence not in ex['gold_sentence_ids']:
             #    return []
         # Extract top sentence and change ex["document"] accordingly
@@ -282,7 +284,7 @@ def vectorize(ex, model, single_answer=False):
                 new_end = answer[1] - window[0]
                 flag = False
                 break
-            elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top_sentence[0] + 1][1]:
+            elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top_sentence[0] + 1][1] and answer[0] < window[1]:
                 new_start = answer[0] - window[0]
                 new_end = window[1] - window[0] - 1
                 flag = False
@@ -299,7 +301,7 @@ def vectorize(ex, model, single_answer=False):
                     if answer[0] >= window[0] and answer[1] < window[1]:
                         new_start.append(answer[0] - window[0])
                         new_end.append(answer[1] - window[0])
-                    elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top + 1][1]:
+                    elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top + 1][1] and answer[0] < window[1]:
                         new_start.append(answer[0] - window[0])
                         new_end.append(answer[1] - window[1])
 
