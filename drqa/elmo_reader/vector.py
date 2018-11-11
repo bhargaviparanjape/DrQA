@@ -12,6 +12,8 @@ from ..selector.vector import vectorize as sent_selector_vectorize
 from ..selector.vector import batchify as sent_selector_batchify
 import numpy as np
 import pdb
+from allennlp.modules.elmo import Elmo
+from allennlp.modules.elmo import batch_to_ids
 
 def pad_single_seq(seq, max_len, pad_token = 0):
     seq += [pad_token for i in range(max_len - len(seq))]
@@ -58,6 +60,7 @@ class sentence_batchifier():
             flag = True
             sentence_boundaries = batch_sentence_boundaries[i]
             offsets = batch_offsets[i]
+
             if len(top_sentences[i]) == 0:
                 continue
             window = sentence_boundaries[top_sentences[i][0]]
@@ -276,18 +279,26 @@ def vectorize(ex, model, single_answer=False):
         # account for answers being in between the gold sentence
 
         flag = True
-        window = sentence_boundaries[top_sentence[0]]
-        for answer in ex['answers']:
-            if answer[0] >= window[0] and answer[1] < window[1]:
-                new_start = answer[0] - window[0]
-                new_end = answer[1] - window[0]
-                flag = False
+        flowing_window = 0
+        for top_id in top_sentence:
+            window = sentence_boundaries[top_id]
+            for answer in ex['answers']:
+                if answer[0] >= window[0] and answer[1] < window[1]:
+                    new_start = answer[0] - window[0]
+                    new_end = answer[1] - window[0]
+                    flag = False
+                    break
+                elif (top_id + 1) < len(sentence_boundaries) and answer[0] >= window[0] and answer[1] < sentence_boundaries[top_id + 1][1] and answer[0] < window[1]:
+                    new_start = answer[0] - window[0]
+                    new_end = window[1] - window[0] - 1
+                    flag = False
+                    break
+            if flag == False:
+                new_start += flowing_window
+                new_end += flowing_window
                 break
-            elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top_sentence[0] + 1][1] and answer[0] < window[1]:
-                new_start = answer[0] - window[0]
-                new_end = window[1] - window[0] - 1
-                flag = False
-                break
+            flowing_window += len(window)
+
         # Single Answer is False for development set
         if flag and single_answer == True:
             return []
@@ -372,11 +383,11 @@ def vectorize(ex, model, single_answer=False):
             start = [a[0] for a in ex['answers']]
             end = [a[1] for a in ex['answers']]
 
-    return document, features, question, selected_offset, start, end, ex['id']
+    return document, features, question, ex['document'][:2], ex['question'][:2], selected_offset, start, end, ex['id']
 
 def batchify(batch):
     """Gather a batch of individual examples into one batch."""
-    NUM_INPUTS = 3
+    NUM_INPUTS = 5
     NUM_TARGETS = 2
     NUM_EXTRA = 2
 
@@ -386,8 +397,12 @@ def batchify(batch):
     docs = [ex[0] for ex in batch]
     features = [ex[1] for ex in batch]
     questions = [ex[2] for ex in batch]
-    offsets = [ex[3] for ex in batch]
+    doc_tokens = [ex[3] for ex in batch]
+    question_tokens = [ex[4] for ex in batch]
+    offsets = [ex[5] for ex in batch]
 
+    x1_t = batch_to_ids(doc_tokens)
+    x2_t = batch_to_ids(question_tokens)
 
     # Batch documents and features
     max_length = max([d.size(0) for d in docs])
@@ -417,13 +432,13 @@ def batchify(batch):
 
     elif len(batch[0]) == NUM_INPUTS + NUM_EXTRA + NUM_TARGETS:
         # ...Otherwise add targets
-        if torch.is_tensor(batch[0][4]):
-            y_s = torch.cat([ex[4] for ex in batch])
-            y_e = torch.cat([ex[5] for ex in batch])
+        if torch.is_tensor(batch[0][6]):
+            y_s = torch.cat([ex[6] for ex in batch])
+            y_e = torch.cat([ex[7] for ex in batch])
         else:
-            y_s = [ex[4] for ex in batch]
-            y_e = [ex[5] for ex in batch]
+            y_s = [ex[6] for ex in batch]
+            y_e = [ex[7] for ex in batch]
     else:
         raise RuntimeError('Incorrect number of inputs per example.')
 
-    return x1, x1_f, x1_mask, x2, x2_mask, y_s, y_e, offsets, ids
+    return x1, x1_f, x1_t, x1_mask, x2, x2_t, x2_mask, y_s, y_e, offsets, ids

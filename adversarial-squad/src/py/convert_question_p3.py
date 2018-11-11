@@ -4,7 +4,6 @@ import collections
 import json
 import math
 import sys
-from nectar import corenlp
 from nltk.corpus import wordnet as wn
 from nltk.stem.lancaster import LancasterStemmer
 import os
@@ -15,6 +14,7 @@ from termcolor import colored
 import sys
 import numpy
 import pdb
+import spacy
 
 OPTS = None
 
@@ -44,7 +44,7 @@ PATTERN_TENSES = ['inf', '3sg', 'p', 'part', 'ppart', '1sg']
 # Constants
 DATASETS = {
 		'dev': 'data/squad/dev-v1.1.json',
-		'sample1k': 'data/squad/SQuAD-v1.1-sample.json',
+		'sample1k': 'out/none_n1000_k1_s0.json',
 		'train': 'data/squad/train-v1.1.json',
 }
 
