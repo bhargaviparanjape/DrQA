@@ -44,7 +44,7 @@ PATTERN_TENSES = ['inf', '3sg', 'p', 'part', 'ppart', '1sg']
 # Constants
 DATASETS = {
 		'dev': 'data/squad/dev-v1.1.json',
-		'sample1k': 'out/none_n1000_k1_s0.json',
+		'sample1k': 'data/squad/SQuAD-v1.1-sample.json',
 		'train': 'data/squad/train-v1.1.json',
 }
 CORENLP_CACHES = {
