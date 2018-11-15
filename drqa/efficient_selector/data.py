@@ -86,10 +86,9 @@ class Dictionary(object):
 
 
 class SentenceSelectorDataset(Dataset):
-
     def __init__(self, examples, model, single_answer=False):
         self.model = model
-        self.examples = examples
+        self.break_sentences(examples)
         self.single_answer = single_answer
 
     def __len__(self):
@@ -99,9 +98,31 @@ class SentenceSelectorDataset(Dataset):
         return vectorize(self.examples[index], self.model, self.single_answer)
 
     def lengths(self):
-        return [(len(ex['sentences']), len(ex['question']))
+        return [(len(ex['document']), len(ex['question']))
                 for ex in self.examples]
 
+    def break_sentences(self, dataset):
+        self.examples = []
+        for ex in dataset:
+            sentence_boundaries = []
+            counter = 0
+            for sent in ex['sentences']:
+                sentence_boundaries.append([counter, counter + len(sent)])
+                counter += len(sent)
+            new_ex = []
+            for i,sent in enumerate(ex['sentences']):
+                new_ex.append({
+                    'id' : ex['id'],
+                    'question' : ex['question'],
+                    'document' : sent,
+                    'offsets' : ex['offsets'][sentence_boundaries[i][0]: sentence_boundaries[i][1]],
+                    'gold_label': 1 if i in ex['gold_sentence_ids']  else 0,
+                    'qlemma' : ex['qlemma'],
+                    'lemma' : ex['lemma'][sentence_boundaries[i][0]: sentence_boundaries[i][1]],
+                    'ner' : ex['ner'][sentence_boundaries[i][0]: sentence_boundaries[i][1]],
+                    'pos' : ex['pos'][sentence_boundaries[i][0]: sentence_boundaries[i][1]],
+                })
+            self.examples += new_ex
 
 # ------------------------------------------------------------------------------
 # PyTorch sampler returning batched of sorted lengths (by doc and question).

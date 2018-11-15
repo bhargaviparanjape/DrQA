@@ -1,4 +1,3 @@
-"""Variety of tools regarding the AddSent adversary."""
 import argparse
 import collections
 import json
