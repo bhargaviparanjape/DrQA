@@ -16,7 +16,6 @@ from tensorboardX import SummaryWriter
 from torch.autograd import Variable
 from .config import override_model_args
 from .rnn_selector import RnnSentSelector
-from .rnn_selector_v2 import  RnnSentSelector2
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +45,6 @@ class SentenceSelector(object):
         # 0-1 per paragraph (no softmax).
         if args.model_type == 'rnn':
             self.network = RnnSentSelector(args, normalize)
-        elif args.model_type == 'rnn2':
-            self.network = RnnSentSelector2(args, normalize)
         else:
             raise RuntimeError('Unsupported model: %s' % args.modeml_type)
 
@@ -223,15 +220,11 @@ class SentenceSelector(object):
         # Transfer to GPU
         if self.use_cuda:
             inputs = [e if e is None else Variable(e.cuda(async=True))
-                      for e in ex[:6]]
-            # target_s = Variable(ex[5].cuda(async=True))
-            # target_e = Variable(ex[6].cuda(async=True))
-            target_g = Variable(ex[6].cuda(async=True))
+                      for e in ex[:5]]
+            target_g = Variable(ex[5].cuda(async=True))
         else:
-            inputs = [e if e is None else Variable(e) for e in ex[:6]]
-            # target_s = Variable(ex[5])
-            # target_e = Variable(ex[6])
-            target_g = Variable(ex[6])
+            inputs = [e if e is None else Variable(e) for e in ex[:5]]
+            target_g = Variable(ex[5])
 
         # Run forward
         # score_s, score_e = self.network(*inputs)
@@ -243,7 +236,8 @@ class SentenceSelector(object):
         # loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
         # mask the cross entropy
         # loss = F.cross_entropy(score_g, target_g)
-        loss = self.masked_softmax(score_g, target_g, inputs[3])
+        # loss = self.masked_softmax(score_g, target_g, inputs[3])
+        loss = F.binary_cross_entropy(F.sigmoid(score_g), target_g.float())
 
         # Clear gradients and run backward
         self.optimizer.zero_grad()
@@ -308,10 +302,10 @@ class SentenceSelector(object):
         if self.use_cuda:
             inputs = [e if e is None else
                       Variable(e.cuda(async=True), volatile=True)
-                      for e in ex[:6]]
+                      for e in ex[:5]]
         else:
             inputs = [e if e is None else Variable(e, volatile=True)
-                      for e in ex[:6]]
+                      for e in ex[:5]]
 
         # Run forward
         # score_s, score_e = self.network(*inputs)
@@ -321,11 +315,6 @@ class SentenceSelector(object):
         # score_s = score_s.data.cpu()
         # score_e = score_e.data.cpu()
         score_g = score_g.data.cpu()
-
-        ## multiply by ex[3] so that the masked input sentences are not picked
-        mask = ex[3].byte()
-        # score_g[mask == 0] = -float("Inf")
-        score_g.data.masked_fill_((1 - mask).data, -float("inf"))
 
         if candidates:
             args = (score_g, candidates, top_n, self.args.max_len)
@@ -388,16 +377,11 @@ class SentenceSelector(object):
             # scores.triu_().tril_(max_len - 1)
 
             # Take argmax or top n
-            scores = score_g[i].numpy()
-            scores_flat = scores.flatten()
-            if top_n == 1:
-                idx_sort = [np.argmax(scores_flat)]
-            elif len(scores_flat) <= top_n:
-                idx_sort = np.argsort(-scores_flat)
+            scores = score_g[i] #.numpy()
+            if F.sigmoid(scores) > 0.5:
+                idx_sort = 1
             else:
-                idx = np.argpartition(-scores_flat, top_n)[0:top_n]
-                idx_sort = idx[np.argsort(-scores_flat[idx])]
-            # pred_idx = np.unravel_index(idx_sort, scores.shape)
+                idx_sort = 0
             pred.append(idx_sort)
             # pred_e.append(e_idx)
             # pred_score.append(scores_flat[idx_sort])
