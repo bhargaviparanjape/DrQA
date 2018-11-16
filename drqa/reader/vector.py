@@ -277,18 +277,26 @@ def vectorize(ex, model, single_answer=False):
         # account for answers being in between the gold sentence
 
         flag = True
-        window = sentence_boundaries[top_sentence[0]]
-        for answer in ex['answers']:
-            if answer[0] >= window[0] and answer[1] < window[1]:
-                new_start = answer[0] - window[0]
-                new_end = answer[1] - window[0]
-                flag = False
+        flowing_window = 0
+        for top_id in top_sentence:
+            window = sentence_boundaries[top_id]
+            for answer in ex['answers']:
+                if answer[0] >= window[0] and answer[1] < window[1]:
+                    new_start = answer[0] - window[0]
+                    new_end = answer[1] - window[0]
+                    flag = False
+                    break
+                elif (top_id + 1) < len(sentence_boundaries) and answer[0] >= window[0] and answer[1] < sentence_boundaries[top_id + 1][1] and answer[0] < window[1]:
+                    new_start = answer[0] - window[0]
+                    new_end = window[1] - window[0] - 1
+                    flag = False
+                    break
+            if flag == False:
+                new_start += flowing_window
+                new_end += flowing_window
                 break
-            elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top_sentence[0] + 1][1] and answer[0] < window[1]:
-                new_start = answer[0] - window[0]
-                new_end = window[1] - window[0] - 1
-                flag = False
-                break
+            flowing_window += len(window)
+
         # Single Answer is False for development set
         if flag and single_answer == True:
             return []

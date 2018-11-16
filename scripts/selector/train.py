@@ -258,16 +258,29 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
     # Make predictions
     examples = 0
     attacked = 0
+    attacked_correct = 0
+    correct = 0
+    non_adv = 0
     for ex in data_loader:
         batch_size = ex[0].size(0)
         pred = model.predict(ex, top_n=args.select_k)
         target = ex[-2:-1]
 
-
         if args.global_mode == "test":
             preds = np.array([p[0] for p in pred])
             sent_lengths = (ex[3].sum(1)).long().data.numpy()
-            attacked += (preds == sent_lengths - 1).sum()
+            # attacked += (pred == sent_lengths - 1).sum()
+            for enum_, p in enumerate(pred):
+                if "high" not in ex[-1][enum_]:
+                    non_adv += 1
+                    continue
+                for q in p:
+                    if q == sent_lengths[enum_] - 1:
+                        attacked += 1
+                    if q == sent_lengths[enum_] - 1 and q in target[enum_]:
+                        attacked_correct += 1
+                    if q in target[enum_]:
+                        correct += 1
 
         # We get metrics for independent start/end and joint start/end
         accuracy = eval_accuracies(pred, target, mode)
