@@ -13,13 +13,6 @@ from ..selector.vector import batchify as sent_selector_batchify
 import numpy as np
 import pdb
 
-SENTENCE_SELECTOR_DUMP = open("data/datasets/selected_sentences_adv_random_copy.txt").readlines()
-SENTENCE_SELECTOR_OUTPUT = {}
-for line in SENTENCE_SELECTOR_DUMP:
-    content = line.split()
-    selected = [int(content[1].strip()), int(content[1].strip()), int(content[1].strip())]
-    SENTENCE_SELECTOR_OUTPUT[content[0].strip()] = selected
-
 def pad_single_seq(seq, max_len, pad_token = 0):
     seq += [pad_token for i in range(max_len - len(seq))]
     return seq
@@ -247,13 +240,6 @@ def vectorize(ex, model, single_answer=False):
                 return []
             # At inference time, use all gold sentences
             top_sentence = ex['gold_sentence_ids']
-            '''
-            for t in top_sentence:
-                if t in SENTENCE_SELECTOR_OUTPUT[ex['id'].strip()]:
-                    top_sentence = SENTENCE_SELECTOR_OUTPUT[ex['id'].strip()]
-                else:
-                    top_sentence = ex['gold_sentence_ids']
-            '''
         else:
             ex_batch = sent_selector_batchify([sent_selector_vectorize(ex, model.sentence_selector, single_answer)])
 
@@ -262,8 +248,6 @@ def vectorize(ex, model, single_answer=False):
             else:
                 # use K sentences
                 top_sentence = model.sentence_selector.predict(ex_batch, top_n = args.select_k)[0]
-            #if len(ex['gold_sentence_ids']) > 0 and top_sentence not in ex['gold_sentence_ids']:
-            #    return []
         # Extract top sentence and change ex["document"] accordingly
         tokens = []
         pos = []
@@ -277,7 +261,7 @@ def vectorize(ex, model, single_answer=False):
             pos += ex['pos'][window[0]:window[1]]
             ner += ex['ner'][window[0]:window[1]]
             lemma += ex['lemma'][window[0]:window[1]]
-            offset_subset += ex["offsets"][sentence_boundaries[t][0]:sentence_boundaries[t][1]]
+            offset_subset += ex["offsets"][window[0]:window[1]]
 
         document = torch.LongTensor([word_dict[w] for w in tokens])
         ex['document'] = tokens
@@ -287,9 +271,7 @@ def vectorize(ex, model, single_answer=False):
         selected_offset = offset_subset
 
         # Check if selected sentence contains any answer span
-        # account for answers being in between the gold sentence
-
-        flag = True
+        flag = False
         flowing_window = 0
         for top_id in top_sentence:
             window = sentence_boundaries[top_id]
@@ -297,21 +279,22 @@ def vectorize(ex, model, single_answer=False):
                 if answer[0] >= window[0] and answer[1] < window[1]:
                     new_start = answer[0] - window[0]
                     new_end = answer[1] - window[0]
-                    flag = False
+                    flag = True
                     break
-            #elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top_sentence[0] + 1][1]:
                 elif (top_id + 1 < len(sentence_boundaries)) and answer[0] >= window[0] and answer[1] < sentence_boundaries[top_id + 1][1] and answer[0] < window[1]:
                     new_start = answer[0] - window[0]
                     new_end = window[1] - window[0] - 1
-                    flag = False
+                    flag = True
                     break
-            if flag == False:
+            # as soon as an answer is found during training, break;
+            if flag:
+                # for relative positions of the new start and end in the combined
                 new_start += flowing_window
                 new_end += flowing_window
                 break
-            flowing_window += len(window)
-        # Single Answer is False for development set
-        if flag and single_answer == True:
+            flowing_window += window[1] - window[0]
+        # Single Answer is False for development set; this means that no answer was retrieved for the train example
+        if not flag and single_answer == True:
             return []
         flowing_window = 0
         if not single_answer and len(ex['answers'])> 0:
@@ -321,12 +304,12 @@ def vectorize(ex, model, single_answer=False):
                 window = sentence_boundaries[top]
                 for answer in ex['answers']:
                     if answer[0] >= window[0] and answer[1] < window[1]:
-                        new_start.append(answer[0] - window[0])
-                        new_end.append(answer[1] - window[0])
-                    #elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top + 1][1]:
-                    elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top + 1][1] and answer[0] < window[1]:
-                        new_start.append(answer[0] - window[0])
-                        new_end.append(answer[1] - window[1])
+                        new_start.append(answer[0] - window[0] + flowing_window)
+                        new_end.append(answer[1] - window[0] + flowing_window)
+                    elif (top_id + 1 < len(sentence_boundaries)) and answer[0] >= window[0] and answer[1] < sentence_boundaries[top + 1][1] and answer[0] < window[1]:
+                        new_start.append(answer[0] - window[0] +  flowing_window)
+                        new_end.append(answer[1] - window[1] + flowing_window)
+                flowing_window += len(window)
 
 
 

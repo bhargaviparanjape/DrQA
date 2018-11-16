@@ -70,6 +70,14 @@ class DocReader(object):
                 self.sentence_selector = SentenceSelector.load(args.sentence_selector_model)
             else:
                 self.sentence_selector = None
+            self.SENTENCE_SELECTOR_OUTPUT = None
+            if args.sentence_selector_dump:
+                SENTENCE_SELECTOR_DUMP = open(args.sentence_selector_dump).readlines()
+                self.SENTENCE_SELECTOR_OUTPUT = {}
+                for line in SENTENCE_SELECTOR_DUMP:
+                    content = line.split()
+                    selected = [int(content[1].strip()), int(content[1].strip()), int(content[1].strip())]
+                    self.SENTENCE_SELECTOR_OUTPUT[content[0].strip()] = selected
 
     def expand_dictionary(self, words):
         """Add words to the DocReader dictionary if they do not exist. The

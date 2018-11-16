@@ -20,15 +20,15 @@ import torch
 sys.path.insert(0, dirname(dirname(dirname(realpath(__file__)))))
 
 # For GloVe based reader
-# from drqa.reader import utils, config
-# from drqa.reader import data as reader_data, vector as reader_vector
-# from drqa.selector import data as selector_data, vector as selector_vector
-# from drqa.reader import DocReader
-
-from drqa.elmo_reader import utils, config
-from drqa.elmo_reader import data as reader_data, vector as reader_vector
+from drqa.reader import utils, config
+from drqa.reader import data as reader_data, vector as reader_vector
 from drqa.selector import data as selector_data, vector as selector_vector
-from drqa.elmo_reader import DocReader
+from drqa.reader import DocReader
+#
+# from drqa.elmo_reader import utils, config
+# from drqa.elmo_reader import data as reader_data, vector as reader_vector
+# from drqa.selector import data as selector_data, vector as selector_vector
+# from drqa.elmo_reader import DocReader
 
 from drqa.selector import SentenceSelector
 from scripts.selector.train import validate_unofficial as validate_selector
@@ -344,14 +344,18 @@ def validate_official(args, data_loader, model, global_stats,
             else:
                 s_offset = offsets[ex_id[i]][pred_s[i][0]][0]
                 e_offset = offsets[ex_id[i]][pred_e[i][0]][1]
-            prediction = texts[ex_id[i]][s_offset:e_offset]
+
+            # If sentence selector is not turned on
+            if not args.use_sentence_selector or args.select_k == 1:
+                prediction = texts[ex_id[i]][s_offset:e_offset]
 
             if args.select_k > 1:
-                prediction1 = ""
-                offset_subset = chosen_offset[i][pred_s[i][0]: pred_e[i][0]]
+                prediction = ""
+                offset_subset = chosen_offset[i][pred_s[i][0]: pred_e[i][0] + 1]
                 for enum_, o in enumerate(offset_subset):
-                    prediction1 += texts[ex_id[i]][o[0]:o[1]] + " "
-                prediction1 = prediction1.strip()
+                    prediction += texts[ex_id[i]][o[0]:o[1]] + " "
+                prediction = prediction.strip()
+
             # Compute metrics
             ground_truths = answers[ex_id[i]]
             exact_match.update(utils.metric_max_over_ground_truths(
