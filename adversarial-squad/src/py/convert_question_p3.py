@@ -7,6 +7,7 @@ from nltk.corpus import wordnet as wn
 from nltk.stem.lancaster import LancasterStemmer
 import os
 from pattern import en as patten
+from nectar import corenlp
 import random
 import re
 from termcolor import colored
@@ -41,19 +42,22 @@ PATTERN_TENSES = ['inf', '3sg', 'p', 'part', 'ppart', '1sg']
 
 
 # Constants
+DATA_ROOT = "/home/bhargavi/robust_nlp/invariance/DrQA/adversarial-squad/"
 DATASETS = {
-		'dev': 'data/squad/dev-v1.1.json',
-		'sample1k': 'out/none_n1000_k1_s0.json',
-		'train': 'data/squad/train-v1.1.json',
+		'dev': DATA_ROOT + 'data/squad/dev-v1.1.json',
+		'sample1k': DATA_ROOT + 'data/squad/none_n1000_k1_s0.json',
+		'train': DATA_ROOT + 'data/squad/train-v1.1.json',
 }
 
 CORENLP_CACHES = {
-		'dev': 'data/squad/corenlp_cache.json',
-		'sample1k': 'data/squad/corenlp_cache.json',
-		'train': 'data/squad/train_corenlp_cache.json',
+		'dev': DATA_ROOT + 'data/squad/corenlp_cache.json',
+		'sample1k': DATA_ROOT + 'data/squad/corenlp_sample1k_cache.json',
+		'train': DATA_ROOT + 'data/squad/train_corenlp_cache.json',
 }
-NEARBY_GLOVE_FILE = 'out/nearby_n100_glove_6B_100d.json'
-POSTAG_FILE = 'data/postag_dict.json'
+NEARBY_GLOVE_FILE = DATA_ROOT + 'out/nearby_n100_glove_6B_100d.json'
+POSTAG_FILE = DATA_ROOT + 'data/postag_dict.json'
+
+
 CORENLP_LOG = 'corenlp.log'
 CORENLP_PORT = 8101
 COMMANDS = ['print-questions', 'print-answers', 'corenlp', 'convert-q',
@@ -466,16 +470,17 @@ def get_qas(dataset):
 def print_questions(qas):
 	qas = sorted(qas, key=lambda x: x[0])
 	for question, answers, context in qas:
-		print question.encode('utf-8')
+		print (question.encode('utf-8'))
 
 def print_answers(qas):
 	for question, answers, context in qas:
 		toks = list(answers)
 		toks[0] = colored(answers[0]['text'], 'cyan')
-		print ', '.join(toks).encode('utf-8')
+		print (', '.join(toks).encode('utf-8'))
 
 def run_corenlp(dataset, qas):
 	cache = {}
+	nlp = spacy.load('en')
 	with corenlp.CoreNLPServer(port=CORENLP_PORT, logfile=CORENLP_LOG) as server:
 		client = corenlp.CoreNLPClient(port=CORENLP_PORT)
 		print >> sys.stderr, 'Running NER for paragraphs...'
@@ -483,10 +488,30 @@ def run_corenlp(dataset, qas):
 			for paragraph in article['paragraphs']:
 				response = client.query_ner(paragraph['context'])
 				cache[paragraph['context']] = response
+				break
+			break
 		print >> sys.stderr, 'Parsing questions...'
-		for question, answers, context in qas:
+		for question, answers, context in qas[:50]:
 			response = client.query_const_parse(question, add_ner=True)
 			cache[question] = response['sentences'][0]
+	cache_file = CORENLP_CACHES[OPTS.dataset]
+	with open(cache_file, 'w') as f:
+		json.dump(cache, f, indent=2)
+
+def run_spacy(dataset, qas):
+	cache = {}
+	nlp = spacy.load('en')
+	print ('Running NER for paragraphs...')
+	for article in dataset['data']:
+		for paragraph in article['paragraphs']:
+			response = nlp(paragraph['context'])
+			cache[paragraph['context']] = response
+			break
+		break
+	for question, answers, context in qas:
+		response = nlp(question)
+		cache[question] = response['sentences'][0]
+		break
 	cache_file = CORENLP_CACHES[OPTS.dataset]
 	with open(cache_file, 'w') as f:
 		json.dump(cache, f, indent=2)
@@ -502,7 +527,7 @@ def run_conversion(qas):
 		const_parse = read_const_parse(parse['parse'])
 		answer = answers[0]['text']
 		if not OPTS.quiet:
-			print question.encode('utf-8')
+			print (question.encode('utf-8'))
 		for rule in CONVERSION_RULES:
 			sent = rule.convert(question, answer, tokens, const_parse)
 			if sent:
@@ -516,17 +541,17 @@ def run_conversion(qas):
 			unmatched_qas.append((question, answer))
 	# Print stats
 	if not OPTS.quiet:
-		print
-	print '=== Summary ==='
-	print 'Matched %d/%d = %.2f%% questions' % (
-			num_matched, len(qas), 100.0 * num_matched / len(qas))
+		print()
+	print ('=== Summary ===')
+	print ('Matched %d/%d = %.2f%% questions' % (
+			num_matched, len(qas), 100.0 * num_matched / len(qas)))
 	for rule in CONVERSION_RULES:
 		num = rule_counter[rule.name]
-		print '  Rule "%s" used %d times = %.2f%%' % (
-				rule.name, num, 100.0 * num / len(qas))
+		print ('  Rule "%s" used %d times = %.2f%%' % (
+				rule.name, num, 100.0 * num / len(qas)))
 
-	print
-	print '=== Sampled unmatched questions ==='
+	print()
+	print ('=== Sampled unmatched questions ===')
 	for q, a in sorted(random.sample(unmatched_qas, 20), key=lambda x: x[0]):
 		print ('%s [%s]' % (q, colored(a, 'cyan'))).encode('utf-8')
 		parse = corenlp_cache[q]
@@ -543,12 +568,12 @@ def inspect_rule(qas, rule_name):
 		func = rule(question, parse)
 		if func:
 			sent = colored(func(answer), 'green')
-			print question.encode('utf-8')
+			print(question.encode('utf-8'))
 			print ('  Rule "%s": %s' % (rule_name, sent)).encode('utf-8')
 			num_matched += 1
-	print
-	print 'Rule "%s" used %d times = %.2f%%' % (
-			rule_name, num_matched, 100.0 * num_matched / len(qas))
+	print()
+	print ('Rule "%s" used %d times = %.2f%%' % (
+			rule_name, num_matched, 100.0 * num_matched / len(qas)))
 
 ##########
 # Rules for altering words in a sentence/question/answer
@@ -768,7 +793,7 @@ def alter_questions(qas, alteration_strategy=None):
 		const_parse = read_const_parse(parse['parse'])
 		answer = answers[0]['text']
 		if not OPTS.quiet:
-			print question.encode('utf-8')
+			print(question.encode('utf-8'))
 		new_qs = alter_question(
 				question, tokens, const_parse, nearby_word_dict, postag_dict,
 				strategy=alteration_strategy)
@@ -784,18 +809,18 @@ def alter_questions(qas, alteration_strategy=None):
 			unmatched_qas.append((question, answer))
 	# Print stats
 	if not OPTS.quiet:
-		print
-	print '=== Summary ==='
-	print 'Matched %d/%d = %.2f%% questions' % (
-			num_matched, len(qas), 100.0 * num_matched / len(qas))
+		print()
+	print('=== Summary ===')
+	print('Matched %d/%d = %.2f%% questions' % (
+			num_matched, len(qas), 100.0 * num_matched / len(qas)))
 	for rule_name in ALL_ALTER_RULES:
 		num = rule_counter[rule_name]
-		print '  Rule "%s" used %d times = %.2f%%' % (
-				rule_name, num, 100.0 * num / len(qas))
-	print
-	print '=== Sampled unmatched questions ==='
+		print('  Rule "%s" used %d times = %.2f%%' % (
+				rule_name, num, 100.0 * num / len(qas)))
+	print()
+	print ('=== Sampled unmatched questions ===')
 	for q, a in sorted(random.sample(unmatched_qas, 20), key=lambda x: x[0]):
-		print ('%s [%s]' % (q, colored(a, 'cyan'))).encode('utf-8')
+		print( ('%s [%s]' % (q, colored(a, 'cyan'))).encode('utf-8'))
 
 def get_tokens_for_answers(answer_objs, corenlp_obj):
 	"""Get CoreNLP tokens corresponding to a SQuAD answer object."""
@@ -959,7 +984,6 @@ def ans_pos(pos, new_ans, end=False, add_dt=False):
 		return new_ans
 	return func
 
-
 def ans_catch_all(new_ans):
 	def func(a, tokens, q, **kwargs):
 		return new_ans
@@ -1027,6 +1051,10 @@ MOD_ANSWER_RULES = [
 		('catch_all', ans_catch_all('cosmic rays')),
 ]
 
+DIVERSE_ANSWER_RULES = [
+	## Included from Robust Machine Comprehension Models via Adversarial Training mohit Bansal
+]
+
 def generate_answers(qas):
 	corenlp_cache = load_cache()
 	#nearby_word_dict = load_nearby_words()
@@ -1053,20 +1081,20 @@ def generate_answers(qas):
 			unmatched_qas.append((question, answer['text']))
 	# Print stats
 	if not OPTS.quiet:
-		print
-	print '=== Summary ==='
-	print 'Matched %d/%d = %.2f%% questions' % (
-			num_matched, len(qas), 100.0 * num_matched / len(qas))
-	print
+		print()
+	print('=== Summary ===')
+	print('Matched %d/%d = %.2f%% questions' % (
+			num_matched, len(qas), 100.0 * num_matched / len(qas)))
+	print()
 	for rule_name, func in ANSWER_RULES:
 		num = rule_counter[rule_name]
-		print '  Rule "%s" used %d times = %.2f%%' % (
-				rule_name, num, 100.0 * num / len(qas))
-	print
-	print '=== Sampled unmatched answers ==='
+		print ('  Rule "%s" used %d times = %.2f%%' % (
+				rule_name, num, 100.0 * num / len(qas)))
+	print()
+	print ('=== Sampled unmatched answers ===')
 	for q, a in sorted(random.sample(unmatched_qas, min(20, len(unmatched_qas))),
 										 key=lambda x: x[0]):
-		print ('%s [%s]' % (q, colored(a, 'cyan'))).encode('utf-8')
+		print (('%s [%s]' % (q, colored(a, 'cyan'))).encode('utf-8'))
 
 def run_end2end(qas, alteration_strategy=None):
 	corenlp_cache = load_cache()
@@ -1078,7 +1106,7 @@ def run_end2end(qas, alteration_strategy=None):
 	num_matched = 0
 	for question, answers, context in qas:
 		if not OPTS.quiet:
-			print question.encode('utf-8')
+			print(question.encode('utf-8'))
 			print ('  Original Answers: [%s]' % (', '.join(x['text'] for x in answers))).encode('utf-8')
 		# Make up answer
 		p_parse = corenlp_cache[context]
@@ -1129,24 +1157,23 @@ def run_end2end(qas, alteration_strategy=None):
 			unmatched_qas.append((question, answer))
 	# Print stats
 	if not OPTS.quiet:
-		print
-	print '=== Summary ==='
-	print 'Matched %d/%d = %.2f%% questions' % (
-			num_matched, len(qas), 100.0 * num_matched / len(qas))
-	print 'Alteration:'
+		print()
+	print('=== Summary ===')
+	print('Matched %d/%d = %.2f%% questions' % (
+			num_matched, len(qas), 100.0 * num_matched / len(qas)))
+	print('Alteration:')
 	for rule_name in ALL_ALTER_RULES:
 		num = alt_rule_counter[rule_name]
-		print '  Rule "%s" used %d times = %.2f%%' % (
-				rule_name, num, 100.0 * num / len(qas))
-	print 'Conversion:'
+		print('  Rule "%s" used %d times = %.2f%%' % (
+				rule_name, num, 100.0 * num / len(qas)))
+	print('Conversion:')
 	for rule in CONVERSION_RULES:
 		num = conv_rule_counter[rule.name]
-		print '  Rule "%s" used %d times = %.2f%%' % (
-				rule.name, num, 100.0 * num / len(qas))
-	print
-	print '=== Sampled unmatched questions ==='
+		print('  Rule "%s" used %d times = %.2f%%' % (
+				rule.name, num, 100.0 * num / len(qas)))
+	print('=== Sampled unmatched questions ===')
 	for q, a in sorted(random.sample(unmatched_qas, 20), key=lambda x: x[0]):
-		print ('%s [%s]' % (q, colored(a, 'cyan'))).encode('utf-8')
+		print(('%s [%s]' % (q, colored(a, 'cyan'))).encode('utf-8'))
 
 def find_answer(offsets, begin_offset, end_offset):
 	"""Match token offsets with the char begin/end offsets of the answer."""
@@ -1183,6 +1210,9 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 						answer = 'ANSWER'
 						determiner = ''
 					else:
+						"""
+						>> insert spacy code here
+						"""
 						p_parse = corenlp_cache[paragraph['context']]
 						ind, a_toks = get_tokens_for_answers(qa['answers'], p_parse)
 						determiner = get_determiner_for_answers(qa['answers'])
@@ -1194,6 +1224,9 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 							raise ValueError('Missing answer')
 					answer_mturk = "<span class='answer'>%s</span>" % answer
 					q_parse = corenlp_cache[question]
+					"""
+					>> insert spacy code here
+					"""
 					q_tokens = q_parse['tokens']
 					q_const_parse = read_const_parse(q_parse['parse'])
 					if alteration_strategy:
@@ -1224,7 +1257,12 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 										})
 									cur_qa['answers'] = new_answers
 								elif OPTS.random:
-									sentences = corenlp_cache[paragraph['context']]["sentences"]
+									cur_text = None
+									added_tokens = [token for s in client.query_ner(sent)["sentences"] for token in
+									                s['tokens']]
+									added_offsets = [(token['characterOffsetBegin'],
+									                  token['characterOffsetEnd']) for token in added_tokens]
+									sentences = corenlp_cache[paragraph['context']]['sentences']
 									sentence_boundaries = []
 									count = 0
 									for s in sentences:
@@ -1232,65 +1270,72 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 										count += len(s['tokens'])
 									tokens = [t for s in sentences for t in s['tokens']]
 									offsets = [(token['characterOffsetBegin'],
-												token['characterOffsetEnd']) for token in tokens]
-									# Usually these token offsets are marked perfectly
-									sentence_lengths = [len(" ".join(s)) for s in sentences]
-									# Pick a random position to insert the sentence
-									insert_position = numpy.random.randint(len(sentences) + 1)
-									added_tokens = [token for s in client.query_ner(sent)["sentences"] for token in s['tokens']]
-									added_offsets = [(token['characterOffsetBegin'],
-												token['characterOffsetEnd']) for token in added_tokens]
-									# Locate gold sentence
-									if insert_position == len(sentences):
-										change_offset = 0
-										next_token = len(tokens)
-										offset_shift_added = 1
-										offser_shift_rest = 0
-									else:
-										change_offset = added_offsets[-1][1] - added_offsets[0][0]
-										next_token = sentence_boundaries[insert_position]
-										offset_shift_added = offsets[next_token][0]
-										offser_shift_rest = added_offsets[-1][1] + 1
+									            token['characterOffsetEnd']) for token in tokens]
+									## Adding many distractor sentences for newsQA
+									## Proportion of distractors == 1/5 of the number of sentences
+									for do in range(4):
+										insert_position = numpy.random.randint(len(sentences) + 1)
+										# Locate gold sentence
+										if insert_position == len(sentences):
+											change_offset = 0
+											next_token = len(tokens)
+											offset_shift_added = 1
+											offser_shift_rest = 0
+										else:
+											change_offset = added_offsets[-1][1] - added_offsets[0][0]
+											next_token = sentence_boundaries[insert_position]
+											offset_shift_added = offsets[next_token][0]
+											offser_shift_rest = added_offsets[-1][1] + 1
+										if insert_position == 0:
+											change_boundary = 0
+										elif insert_position == len(sentence_boundaries):
+											change_boundary = len(tokens)
+										else:
+											change_boundary = sentence_boundaries[insert_position]
 
-									new_answers = []
-									new_tokens = tokens[:next_token] + added_tokens + tokens[next_token:]
-									new_offsets = offsets[:next_token] + [(a[0]+offset_shift_added, a[1] + offset_shift_added) for a in added_offsets] + \
-									[(a[0] + offser_shift_rest, a[1] + offser_shift_rest) for a in offsets[next_token:]]
-									for ans in qa['answers']:
-										if ans == None:
-											new_answers.append(ans)
-											continue
-										found = find_answer(offsets,ans['answer_start'], ans['answer_start'] + len(ans['text']))
-										if found is not None:
-											start_token, end_token = found
-											if start_token >= next_token:
-												new_answers.append({
-													'text': ans['text'],
-													'answer_start': ans['answer_start'] + change_offset + 1
-												})
-												new_start_token, new_end_token = find_answer(new_offsets, new_answers[-1]['answer_start'], new_answers[-1]['answer_start'] + len(ans['text']))
-												assert [t['word'] for t in tokens[start_token:end_token]] == [t['word'] for t in new_tokens[new_start_token:new_end_token]]
+										new_answers = []
+										new_tokens = tokens[:next_token] + added_tokens + tokens[next_token:]
+										new_offsets = offsets[:next_token] + [(a[0]+offset_shift_added, a[1] + offset_shift_added) for a in added_offsets] + \
+										[(a[0] + offser_shift_rest, a[1] + offser_shift_rest) for a in offsets[next_token:]]
+										new_sentence_boundaries = sentence_boundaries[:insert_position] + [change_boundary] + \
+										                          [len(added_tokens) + s for s in sentence_boundaries[insert_position:]]
+										for ans in qa['answers']:
+											if ans == None:
+												new_answers.append(ans)
+												continue
+											found = find_answer(offsets,ans['answer_start'], ans['answer_start'] + len(ans['text']))
+											if found is not None:
+												start_token, end_token = found
+												if start_token >= next_token:
+													new_answers.append({
+														'text': ans['text'],
+														'answer_start': ans['answer_start'] + change_offset + 1
+													})
+													new_start_token, new_end_token = find_answer(new_offsets, new_answers[-1]['answer_start'], new_answers[-1]['answer_start'] + len(ans['text']))
+													assert [t['word'] for t in tokens[start_token:end_token]] == [t['word'] for t in new_tokens[new_start_token:new_end_token]]
+												else:
+													new_answers.append(ans)
 											else:
 												new_answers.append(ans)
-										else:
-											new_answers.append(ans)
-									# Add the sentence in that location and return the text
+										qa['answers'] = new_answers
+										# tokens : new tokens
+										tokens = new_tokens
+										# offsets = new offsets
+										offsets = new_offsets
+										# sentence boundaries
+										sentence_boundaries = new_sentence_boundaries
 									cur_text = " ".join([token['word'] for token in new_tokens])
-									# verify again on final splitting
-									runtime_tokens = [token for s in client.query_ner(cur_text)["sentences"] for token in s['tokens']]
-									runtime_offsets = [(token['characterOffsetBegin'], token['characterOffsetEnd']) for token in runtime_tokens]
-									#assert new_offsets == runtime_offsets
 									cur_qa['answers'] = new_answers
-									# TODO: Handle, will not work when sentence splitting of the resultant text doesnt match at test
-									# Sanity check code to make sure processing the changed text still gets the correct answer
 								else:
 									cur_text = '%s %s' % (paragraph['context'], sent)
 								cur_paragraph = {'context': cur_text, 'qas': [cur_qa]}
 								out_paragraphs.append(cur_paragraph)
 								sent_mturk = rule.convert(q_str, answer_mturk, q_tokens, q_const_parse)
 								mturk_data.append((qa['id'], sent_mturk))
+								# break when any rule triggers
 								break
-
+				break
+			break
 
 
 	if OPTS.dataset != 'dev':
@@ -1301,11 +1346,11 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 		prefix = '%s-pre' % prefix
 	if OPTS.random:
 		prefix = '%s-random' % prefix
-	with open(os.path.join('out', prefix + '.json'), 'w') as f:
+	with open(os.path.join(DATA_ROOT, 'out', prefix + '.json'), 'w') as f:
 		json.dump(out_obj, f)
-	with open(os.path.join('out', prefix + '-indented.json'), 'w') as f:
+	with open(os.path.join(DATA_ROOT, 'out', prefix + '-indented.json'), 'w') as f:
 		json.dump(out_obj, f, indent=2)
-	with open(os.path.join('out', prefix + '-mturk.tsv'), 'w') as f:
+	with open(os.path.join(DATA_ROOT, 'out', prefix + '-mturk.tsv'), 'w') as f:
 		for qid, sent in mturk_data:
 			print >> f, ('%s\t%s' % (qid, sent)).encode('ascii', 'ignore')
 
