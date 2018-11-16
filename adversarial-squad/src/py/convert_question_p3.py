@@ -488,8 +488,6 @@ def run_corenlp(dataset, qas):
 			for paragraph in article['paragraphs']:
 				response = client.query_ner(paragraph['context'])
 				cache[paragraph['context']] = response
-				break
-			break
 		print >> sys.stderr, 'Parsing questions...'
 		for question, answers, context in qas[:50]:
 			response = client.query_const_parse(question, add_ner=True)
@@ -506,12 +504,9 @@ def run_spacy(dataset, qas):
 		for paragraph in article['paragraphs']:
 			response = nlp(paragraph['context'])
 			cache[paragraph['context']] = response
-			break
-		break
 	for question, answers, context in qas:
 		response = nlp(question)
 		cache[question] = response['sentences'][0]
-		break
 	cache_file = CORENLP_CACHES[OPTS.dataset]
 	with open(cache_file, 'w') as f:
 		json.dump(cache, f, indent=2)
@@ -1334,8 +1329,6 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 								mturk_data.append((qa['id'], sent_mturk))
 								# break when any rule triggers
 								break
-				break
-			break
 
 
 	if OPTS.dataset != 'dev':
