@@ -1196,6 +1196,7 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 			out_article = {'title': article['title'], 'paragraphs': out_paragraphs}
 			out_data.append(out_article)
 			for paragraph in article['paragraphs']:
+				# original paragraph gets appended
 				out_paragraphs.append(paragraph)
 				for qa in paragraph['qas']:
 					question = qa['question'].strip()
@@ -1251,6 +1252,7 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 											'answer_start': a['answer_start'] + len(sent) + 1
 										})
 									cur_qa['answers'] = new_answers
+									distractors = []
 								elif OPTS.random:
 									cur_text = None
 									added_tokens = [token for s in client.query_ner(sent)["sentences"] for token in
@@ -1268,10 +1270,16 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 									            token['characterOffsetEnd']) for token in tokens]
 									## Adding many distractor sentences for newsQA
 									## Proportion of distractors == 1/5 of the number of sentences
-									for do in range(4):
-										insert_position = numpy.random.randint(len(sentences) + 1)
-										# Locate gold sentence
-										if insert_position == len(sentences):
+									num_distractors_to_add = int(0.2*len(sentences)) + 1 # ceiling
+									distractors = []
+									for do in range(num_distractors_to_add):
+										insert_position = numpy.random.randint(len(sentence_boundaries) + 1)
+										## update distractor table:
+										for enum_, position in enumerate(distractors):
+											if position >= insert_position:
+												distractors[enum_] += 1
+										distractors.append(insert_position)
+										if insert_position == len(sentence_boundaries):
 											change_offset = 0
 											next_token = len(tokens)
 											offset_shift_added = 1
@@ -1322,8 +1330,9 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 									cur_text = " ".join([token['word'] for token in new_tokens])
 									cur_qa['answers'] = new_answers
 								else:
+									distractors = []
 									cur_text = '%s %s' % (paragraph['context'], sent)
-								cur_paragraph = {'context': cur_text, 'qas': [cur_qa]}
+								cur_paragraph = {'context': cur_text, 'qas': [cur_qa], 'distractor_indices' : distractors}
 								out_paragraphs.append(cur_paragraph)
 								sent_mturk = rule.convert(q_str, answer_mturk, q_tokens, q_const_parse)
 								mturk_data.append((qa['id'], sent_mturk))
