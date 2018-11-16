@@ -491,7 +491,7 @@ class DocReader(object):
         return DocReader(args, word_dict, feature_dict, state_dict, normalize)
 
     @staticmethod
-    def load_checkpoint(filename, normalize=True):
+    def load_checkpoint(filename, new_args=None, normalize=True):
         logger.info('Loading model %s' % filename)
         saved_params = torch.load(
             filename, map_location=lambda storage, loc: storage
@@ -502,6 +502,8 @@ class DocReader(object):
         epoch = saved_params['epoch']
         optimizer = saved_params['optimizer']
         args = saved_params['args']
+        if new_args:
+            args = new_args
         model = DocReader(args, word_dict, feature_dict, state_dict, normalize)
         model.init_optimizer(optimizer)
         return model, epoch

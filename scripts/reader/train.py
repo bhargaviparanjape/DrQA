@@ -13,7 +13,7 @@ import os
 import subprocess
 import sys
 from os.path import dirname, realpath
-
+import pdb
 import numpy as np
 import torch
 
@@ -338,6 +338,14 @@ def validate_official(args, data_loader, model, global_stats,
                 e_offset = offsets[ex_id[i]][pred_e[i][0]][1]
             prediction = texts[ex_id[i]][s_offset:e_offset]
 
+            if args.select_k > 1:
+                prediction1 = ""
+                offset_subset = chosen_offset[i][pred_s[i][0]: pred_e[i][0]]
+                for enum_, o in enumerate(offset_subset):
+                    prediction1 += texts[ex_id[i]][o[0]:o[1]] + " "
+                prediction1 = prediction1.strip()
+            pdb.set_trace()
+
             # Compute metrics
             ground_truths = answers[ex_id[i]]
             exact_match.update(utils.metric_max_over_ground_truths(
@@ -465,6 +473,13 @@ def validate_adversarial(args, model, global_stats, mode="dev"):
                     s_offset = offsets[ex_id[i]][pred_s[i][0]][0]
                     e_offset = offsets[ex_id[i]][pred_e[i][0]][1]
                 prediction = texts[ex_id[i]][s_offset:e_offset]
+
+                if args.select_k > 1:
+                    prediction = ""
+                    offset_subset = chosen_offset[i][pred_s[i][0]: pred_e[i][0]]
+                    for enum_, o in enumerate(offset_subset):
+                        prediction += texts[ex_id[i]][o[0]:o[1]] + " "
+                    prediction = prediction.strip()
 
                 predictions[ex_id[i]] = prediction
 
@@ -674,8 +689,9 @@ def main(args):
             dev_sampler1 = torch.utils.data.sampler.SequentialSampler(dev_dataset1)
         dev_loader1 = torch.utils.data.DataLoader(
             dev_dataset1,
-            batch_size=args.test_batch_size,
-            sampler=dev_sampler1,
+            #batch_size=args.test_batch_size,
+            #sampler=dev_sampler1,
+            batch_sampler = dev_sampler1,
             num_workers=args.data_workers,
             collate_fn=selector_vector.batchify,
             pin_memory=args.cuda,
@@ -706,9 +722,9 @@ def main(args):
         print(result1["exact_match"])
         if args.use_sentence_selector:
             sent_stats = {'timer': utils.Timer(), 'epoch': 0, 'best_valid': 0}
-            sent_selector_results = validate_selector(model.sentence_selector.args, dev_loader1, model.sentence_selector, sent_stats, mode="dev")
-            print("Sentence Selector model acheives:")
-            print(sent_selector_results["accuracy"])
+            #sent_selector_results = validate_selector(model.sentence_selector.args, dev_loader1, model.sentence_selector, sent_stats, mode="dev")
+            #print("Sentence Selector model acheives:")
+            #print(sent_selector_results["accuracy"])
 
         if len(args.adv_dev_json) > 0:
             validate_adversarial(args, model, stats, mode="dev")
