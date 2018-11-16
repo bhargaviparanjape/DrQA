@@ -9,6 +9,7 @@
 import numpy as np
 import logging
 import unicodedata
+import pdb
 
 from torch.utils.data import Dataset
 from torch.utils.data.sampler import Sampler, BatchSampler
@@ -115,6 +116,7 @@ class SortedBatchSampler(BatchSampler):
         self.shuffle = shuffle
 
     def __iter__(self):
+        ## currently not supported : what if a single example have MAX sentences
         lengths = np.array(
             [(-l[0], -l[1], -l[2], np.random.random()) for l in self.lengths],
             dtype=[('l1', np.int_), ('l2', np.int_), ('l3', np.int_), ('rand', np.float_)]
@@ -123,11 +125,11 @@ class SortedBatchSampler(BatchSampler):
         #     np.random.shuffle(lengths)
         # indices = np.argsort(lengths, order=('l1', 'l2', 'rand'))
         indices = []
-        MAX_BATCH_CONTENT = 1000
+        MAX_BATCH_CONTENT = 100
         start = 0
         current_size = 0
         for i in range(len(lengths)):
-            current_size += lengths[i][0]*lengths[i][1]
+            current_size += (-lengths[i][0]) #*lengths[i][1]
             if current_size > MAX_BATCH_CONTENT:
                 indices.append((start, i))
                 current_size = 0

@@ -13,6 +13,13 @@ from ..selector.vector import batchify as sent_selector_batchify
 import numpy as np
 import pdb
 
+SENTENCE_SELECTOR_DUMP = open("data/datasets/selected_sentences_adv_random_copy.txt").readlines()
+SENTENCE_SELECTOR_OUTPUT = {}
+for line in SENTENCE_SELECTOR_DUMP:
+    content = line.split()
+    selected = [int(content[1].strip()), int(content[1].strip()), int(content[1].strip())]
+    SENTENCE_SELECTOR_OUTPUT[content[0].strip()] = selected
+
 def pad_single_seq(seq, max_len, pad_token = 0):
     seq += [pad_token for i in range(max_len - len(seq))]
     return seq
@@ -58,7 +65,6 @@ class sentence_batchifier():
             flag = True
             sentence_boundaries = batch_sentence_boundaries[i]
             offsets = batch_offsets[i]
-
             if len(top_sentences[i]) == 0:
                 continue
             window = sentence_boundaries[top_sentences[i][0]]
@@ -241,6 +247,13 @@ def vectorize(ex, model, single_answer=False):
                 return []
             # At inference time, use all gold sentences
             top_sentence = ex['gold_sentence_ids']
+            '''
+            for t in top_sentence:
+                if t in SENTENCE_SELECTOR_OUTPUT[ex['id'].strip()]:
+                    top_sentence = SENTENCE_SELECTOR_OUTPUT[ex['id'].strip()]
+                else:
+                    top_sentence = ex['gold_sentence_ids']
+            '''
         else:
             ex_batch = sent_selector_batchify([sent_selector_vectorize(ex, model.sentence_selector, single_answer)])
 
@@ -286,7 +299,8 @@ def vectorize(ex, model, single_answer=False):
                     new_end = answer[1] - window[0]
                     flag = False
                     break
-                elif (top_id + 1) < len(sentence_boundaries) and answer[0] >= window[0] and answer[1] < sentence_boundaries[top_id + 1][1] and answer[0] < window[1]:
+            #elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top_sentence[0] + 1][1]:
+                elif (top_id + 1 < len(sentence_boundaries)) and answer[0] >= window[0] and answer[1] < sentence_boundaries[top_id + 1][1] and answer[0] < window[1]:
                     new_start = answer[0] - window[0]
                     new_end = window[1] - window[0] - 1
                     flag = False
@@ -296,10 +310,10 @@ def vectorize(ex, model, single_answer=False):
                 new_end += flowing_window
                 break
             flowing_window += len(window)
-
         # Single Answer is False for development set
         if flag and single_answer == True:
             return []
+        flowing_window = 0
         if not single_answer and len(ex['answers'])> 0:
             new_start = []
             new_end = []
@@ -309,6 +323,7 @@ def vectorize(ex, model, single_answer=False):
                     if answer[0] >= window[0] and answer[1] < window[1]:
                         new_start.append(answer[0] - window[0])
                         new_end.append(answer[1] - window[0])
+                    #elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top + 1][1]:
                     elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top + 1][1] and answer[0] < window[1]:
                         new_start.append(answer[0] - window[0])
                         new_end.append(answer[1] - window[1])

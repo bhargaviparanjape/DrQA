@@ -429,6 +429,8 @@ def batchify(batch):
     NUM_INPUTS = 7
     NUM_TARGETS = 2
     NUM_EXTRA = 1
+    
+    batch = [ex for ex in batch if len(ex) != 0]
 
     docs = [ex[0] for ex in batch]
     doc_chars = [ex[1] for ex in batch]

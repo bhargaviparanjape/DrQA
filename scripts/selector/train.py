@@ -16,10 +16,10 @@ import subprocess
 import logging
 from os.path import dirname,realpath
 sys.path.insert(0, dirname(dirname(dirname(realpath(__file__)))))
-from tensorboardX import SummaryWriter
 from drqa.selector import utils, vector, config, data
 from drqa.selector import SentenceSelector
 from drqa import DATA_DIR as DRQA_DATA
+import pdb
 
 logger = logging.getLogger()
 # writer = SummaryWriter()
@@ -31,6 +31,7 @@ logger = logging.getLogger()
 
 # Defaults
 DATA_DIR = os.path.join(DRQA_DATA, 'datasets')
+DUMP_FILE = "selected_sentences_adv_random.txt"
 MODEL_DIR = '/tmp/drqa-models/'
 EMBED_DIR = os.path.join(DRQA_DATA, 'embeddings')
 
@@ -244,7 +245,39 @@ def train(args, data_loader, model, global_stats):
 # Validation loops. Includes both "unofficial" and "official" functions that
 # use different metrics and implementations.
 # ------------------------------------------------------------------------------
+'''
+def validate_adversarial(args, model, global_stats, mode):
+    for idx, dataset_file in enumerate(args.adv_dev_json):
 
+    predictions = {}
+
+    logger.info("Validating Adversarial Dataset %s" % dataset_file)
+    exs = utils.load_data(args, args.adv_dev_file[idx])
+    logger.info('Num dev examples = %d' % len(exs))
+## Create dataloader
+    dev_dataset = reader_data.ReaderDataset(exs, model, single_answer=False)
+    if args.sort_by_len:
+        dev_sampler = reader_data.SortedBatchSampler(dev_dataset.lengths(),
+                                                  args.test_batch_size,
+                                                  shuffle=False)
+        else:
+            dev_sampler = torch.utils.data.sampler.SequentialSampler(dev_dataset)
+        if args.use_sentence_selector:
+            dev_batcher = reader_vector.sentence_batchifier(model, single_answer=False)
+            #batching_function = dev_batcher.batchify
+            batching_function = reader_vector.batchify
+        else:
+            batching_function = reader_vector.batchify
+        dev_loader = torch.utils.data.DataLoader(
+            dev_dataset,
+            batch_size=args.test_batch_size,
+            sampler=dev_sampler,
+            num_workers=args.data_workers,
+            collate_fn=batching_function,
+            pin_memory=args.cuda,
+        )
+    validate_unofficial(args, data_loader, model, global_stats, mode)
+'''
 
 def validate_unofficial(args, data_loader, model, global_stats, mode):
     """Run one full unofficial validation.
@@ -254,6 +287,7 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
     acc = utils.AverageMeter()
     # end_acc = utils.AverageMeter()
     # exact_match = utils.AverageMeter()
+    # fout = open(os.path.join(DATA_DIR,DUMP_FILE), "w+")
 
     # Make predictions
     examples = 0
@@ -263,25 +297,29 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
     non_adv = 0
     for ex in data_loader:
         batch_size = ex[0].size(0)
-        pred = model.predict(ex, top_n=args.select_k)
+        pred = model.predict(ex, top_n=3)
         target = ex[-2:-1]
 
         if args.global_mode == "test":
             preds = np.array([p[0] for p in pred])
             sent_lengths = (ex[3].sum(1)).long().data.numpy()
-            # attacked += (pred == sent_lengths - 1).sum()
+            #attacked += (pred == sent_lengths - 1).sum()
             for enum_, p in enumerate(pred):
+                # fout.write("%s\t%d\t%d\t%d\n"%(ex[-1][enum_], p[0], p[1], p[2]))
+                true_flag = False
                 if "high" not in ex[-1][enum_]:
                     non_adv += 1
                     continue
                 for q in p:
-                    if q == sent_lengths[enum_] - 1:
-                        attacked += 1
-                    if q == sent_lengths[enum_] - 1 and q in target[enum_]:
-                        attacked_correct += 1
-                    if q in target[enum_]:
+                    if q in target[0][enum_]:
                         correct += 1
-
+                        true_flag = True
+                for q in p:
+                    if q == sent_lengths[enum_]-1:
+                        attacked += 1
+                    if q == sent_lengths[enum_]-1 and true_flag:
+                        attacked_correct  += 1
+            #attacked += (pred == sent_lengths - 1).astype(int).sum()
         # We get metrics for independent start/end and joint start/end
         accuracy = eval_accuracies(pred, target, mode)
         acc.update(accuracy, batch_size)
@@ -290,9 +328,11 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
 
         # If getting train accuracies, sample max 10k
         examples += batch_size
+        if examples % 1000 == 0:
+            print("%d examples completed" % examples)
         if mode == 'train' and examples >= 1e4:
             break
-
+    # fout.close()
     logger.info('%s valid unofficial: Epoch = %d | accuracy = %.2f | ' %
                 (mode, global_stats['epoch'], acc.avg) +
                 'examples = %d | ' %
@@ -301,7 +341,10 @@ def validate_unofficial(args, data_loader, model, global_stats, mode):
 
     if args.global_mode == "test":
         print("Number of examples attacked succesfully: %d" % attacked)
-        print("Total number of examples: %d" % examples)
+        print("Total number of correct adversarial examples: %d" % correct)
+        print("Number of examples adversarial examples: %d" % non_adv)
+        print("Number of correct examples attacked succesfully: %d" % attacked_correct)
+        print("Number of examples: %d" % examples)
     return {'accuracy': acc.avg}
 
 

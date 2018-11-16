@@ -44,13 +44,13 @@ PATTERN_TENSES = ['inf', '3sg', 'p', 'part', 'ppart', '1sg']
 # Constants
 DATASETS = {
 		'dev': 'data/squad/dev-v1.1.json',
-		'sample1k': 'out/none_n1000_k1_s0.json',
+		'sample1k': 'data/newsqa/NewsQA-v1.0-addrandom-dev.json',
 		'train': 'data/newsqa/train.json',
 }
 
 CORENLP_CACHES = {
 		'dev': 'data/squad/corenlp_cache.json',
-		'sample1k': 'data/squad/corenlp_cache.json',
+		'sample1k': 'data/newsqa/corenlp_cache.json',
 		'train': 'data/newsqa/corenlp_train_new.json',
 }
 NEARBY_GLOVE_FILE = 'out/nearby_n100_glove_6B_100d_new.json'
@@ -1225,66 +1225,66 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 										})
 									cur_qa['answers'] = new_answers
 								elif OPTS.random:
-									sentences = corenlp_cache[paragraph['context']]["sentences"]
-									sentence_boundaries = []
-									count = 0
-									for s in sentences:
-										sentence_boundaries.append(count)
-										count += len(s['tokens'])
-									tokens = [t for s in sentences for t in s['tokens']]
-									offsets = [(token['characterOffsetBegin'],
-												token['characterOffsetEnd']) for token in tokens]
-									# Usually these token offsets are marked perfectly
-									sentence_lengths = [len(" ".join(s)) for s in sentences]
-								        # Pick a random position to insert the sentence
+									cur_text = None
 									for do in range(4):
-									insert_position = numpy.random.randint(len(sentences) + 1)
-									added_tokens = [token for s in client.query_ner(sent)["sentences"] for token in s['tokens']]
-									added_offsets = [(token['characterOffsetBegin'],
-												token['characterOffsetEnd']) for token in added_tokens]
-									# Locate gold sentence
-									if insert_position == len(sentences):
-										change_offset = 0
-										next_token = len(tokens)
-										offset_shift_added = 1
-										offser_shift_rest = 0
-									else:
-										change_offset = added_offsets[-1][1] - added_offsets[0][0]
-										next_token = sentence_boundaries[insert_position]
-										offset_shift_added = offsets[next_token][0]
-										offser_shift_rest = added_offsets[-1][1] + 1
+										if cur_text == None:
+											sentences = corenlp_cache[paragraph['context']]["sentences"]
+										else:
+											sentences = client.query_ner(cur_text)["sentences"]
+										sentence_boundaries = []
+										count = 0
+										for s in sentences:
+											sentence_boundaries.append(count)
+											count += len(s['tokens'])
+										tokens = [t for s in sentences for t in s['tokens']]
+										offsets = [(token['characterOffsetBegin'],
+													token['characterOffsetEnd']) for token in tokens]
+										# Usually these token offsets are marked perfectly
+										sentence_lengths = [len(" ".join(s)) for s in sentences]
+										# Pick a random position to insert the sentence
+										insert_position = numpy.random.randint(len(sentences) + 1)
+										added_tokens = [token for s in client.query_ner(sent)["sentences"] for token in s['tokens']]
+										added_offsets = [(token['characterOffsetBegin'],
+													token['characterOffsetEnd']) for token in added_tokens]
+										# Locate gold sentence
+										if insert_position == len(sentences):
+											change_offset = 0
+											next_token = len(tokens)
+											offset_shift_added = 1
+											offser_shift_rest = 0
+										else:
+											change_offset = added_offsets[-1][1] - added_offsets[0][0]
+											next_token = sentence_boundaries[insert_position]
+											offset_shift_added = offsets[next_token][0]
+											offser_shift_rest = added_offsets[-1][1] + 1
 
-									new_answers = []
-									new_tokens = tokens[:next_token] + added_tokens + tokens[next_token:]
-									new_offsets = offsets[:next_token] + [(a[0]+offset_shift_added, a[1] + offset_shift_added) for a in added_offsets] + \
-									[(a[0] + offser_shift_rest, a[1] + offser_shift_rest) for a in offsets[next_token:]]
-									for ans in qa['answers']:
-										if ans == None:
-											new_answers.append(ans)
-											continue
-										found = find_answer(offsets,ans['answer_start'], ans['answer_start'] + len(ans['text']))
-										if found is not None:
-											start_token, end_token = found
-											if start_token >= next_token:
-												new_answers.append({
-													'text': ans['text'],
-													'answer_start': ans['answer_start'] + change_offset + 1
-												})
-												new_start_token, new_end_token = find_answer(new_offsets, new_answers[-1]['answer_start'], new_answers[-1]['answer_start'] + len(ans['text']))
-												assert [t['word'] for t in tokens[start_token:end_token]] == [t['word'] for t in new_tokens[new_start_token:new_end_token]]
+										new_answers = []
+										new_tokens = tokens[:next_token] + added_tokens + tokens[next_token:]
+										new_offsets = offsets[:next_token] + [(a[0]+offset_shift_added, a[1] + offset_shift_added) for a in added_offsets] + \
+										[(a[0] + offser_shift_rest, a[1] + offser_shift_rest) for a in offsets[next_token:]]
+										for ans in qa['answers']:
+											if ans == None:
+												new_answers.append(ans)
+												continue
+											found = find_answer(offsets,ans['answer_start'], ans['answer_start'] + len(ans['text']))
+											if found is not None:
+												start_token, end_token = found
+												if start_token >= next_token:
+													new_answers.append({
+														'text': ans['text'],
+														'answer_start': ans['answer_start'] + change_offset + 1
+													})
+													new_start_token, new_end_token = find_answer(new_offsets, new_answers[-1]['answer_start'], new_answers[-1]['answer_start'] + len(ans['text']))
+													assert [t['word'] for t in tokens[start_token:end_token]] == [t['word'] for t in new_tokens[new_start_token:new_end_token]]
+												else:
+													new_answers.append(ans)
 											else:
 												new_answers.append(ans)
-										else:
-											new_answers.append(ans)
-									# Add the sentence in that location and return the text
-									cur_text = " ".join([token['word'] for token in new_tokens])
-									# verify again on final splitting
-									runtime_tokens = [token for s in client.query_ner(cur_text)["sentences"] for token in s['tokens']]
-									runtime_offsets = [(token['characterOffsetBegin'], token['characterOffsetEnd']) for token in runtime_tokens]
-									#assert new_offsets == runtime_offsets
-									cur_qa['answers'] = new_answers
-									# TODO: Handle, will not work when sentence splitting of the resultant text doesnt match at test
-									# Sanity check code to make sure processing the changed text still gets the correct answer
+										# Add the sentence in that location and return the text
+										cur_text = " ".join([token['word'] for token in new_tokens])
+										qa['answers'] = new_answers
+
+									cur_qa['answers'] = new_answers	
 								else:
 									cur_text = '%s %s' % (paragraph['context'], sent)
 								cur_paragraph = {'context': cur_text, 'qas': [cur_qa]}
@@ -1303,11 +1303,11 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 		prefix = '%s-pre' % prefix
 	if OPTS.random:
 		prefix = '%s-random' % prefix
-	with open(os.path.join('out', prefix + '.json'), 'w') as f:
+	with open(os.path.join('out1', prefix + '.json'), 'w') as f:
 		json.dump(out_obj, f)
-	with open(os.path.join('out', prefix + '-indented.json'), 'w') as f:
+	with open(os.path.join('out1', prefix + '-indented.json'), 'w') as f:
 		json.dump(out_obj, f, indent=2)
-	with open(os.path.join('out', prefix + '-mturk.tsv'), 'w') as f:
+	with open(os.path.join('out1', prefix + '-mturk.tsv'), 'w') as f:
 		for qid, sent in mturk_data:
 			print >> f, ('%s\t%s' % (qid, sent)).encode('ascii', 'ignore')
 
