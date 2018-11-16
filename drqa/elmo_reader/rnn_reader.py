@@ -9,19 +9,17 @@
 import torch
 import torch.nn as nn
 from . import layers
-import pdb
-
-
+from allennlp.modules.elmo import Elmo
 # ------------------------------------------------------------------------------
 # Network
 # ------------------------------------------------------------------------------
 
 
-class RnnSentSelector(nn.Module):
+class RnnDocReader(nn.Module):
     RNN_TYPES = {'lstm': nn.LSTM, 'gru': nn.GRU, 'rnn': nn.RNN}
 
     def __init__(self, args, normalize=True):
-        super(RnnSentSelector, self).__init__()
+        super(RnnDocReader, self).__init__()
         # Store config
         self.args = args
 
@@ -40,7 +38,6 @@ class RnnSentSelector(nn.Module):
             doc_input_size += args.embedding_dim
 
         # RNN document encoder
-        ## this needs to run across sentences
         self.doc_rnn = layers.StackedBRNN(
             input_size=doc_input_size,
             hidden_size=args.hidden_size,
@@ -64,12 +61,14 @@ class RnnSentSelector(nn.Module):
             padding=args.rnn_padding,
         )
 
+        options_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_options.json"
+        weight_file = "https://s3-us-west-2.amazonaws.com/allennlp/models/elmo/2x4096_512_2048cnn_2xhighway/elmo_2x4096_512_2048cnn_2xhighway_weights.hdf5"
+        self.doc_rnn = Elmo(options_file, weight_file, requires_grad=True, num_output_representations=1, dropout=args.dropout_rnn)
+        self.question_rnn = Elmo(options_file, weight_file, requires_grad=True, num_output_representations=1, dropout=args.dropout_rnn)
         # Output sizes of rnn encoders
         doc_hidden_size = 2 * args.hidden_size
         question_hidden_size = 2 * args.hidden_size
-        if args.concat_rnn_layers:
-            doc_hidden_size *= args.doc_layers
-            question_hidden_size *= args.question_layers
+
 
         # Question merging
         if args.question_merge not in ['avg', 'self_attn']:
@@ -77,35 +76,19 @@ class RnnSentSelector(nn.Module):
         if args.question_merge == 'self_attn':
             self.self_attn = layers.LinearSeqAttn(question_hidden_size)
 
-        self.self_attn_document = layers.LinearSeqAttn(doc_hidden_size)
-
         # Bilinear attention for span start/end
-        ## simple mlp to score these sentences
-        self.sentence_scorer = layers.BilinearSeq(
+        self.start_attn = layers.BilinearSeqAttn(
             doc_hidden_size,
             question_hidden_size,
+            normalize=normalize,
+        )
+        self.end_attn = layers.BilinearSeqAttn(
             doc_hidden_size,
+            question_hidden_size,
+            normalize=normalize,
         )
 
-        # self.end_attn = layers.BilinearSeqAttn(
-        #     doc_hidden_size,
-        #     question_hidden_size,
-        #     normalize=normalize,
-        # )
-        self.relevance_scorer = nn.Sequential(
-            nn.Linear(doc_hidden_size, 64),
-            nn.ReLU(),
-            nn.Linear(64, 1))
-
-        # self.relevance_scorer1 = layers.BilinearSeq(
-        #     doc_hidden_size,
-        #     question_hidden_size,
-        #     1,
-        # )
-
-
-
-    def forward(self, x1, x1_f, x1_mask, x2, x2_mask):
+    def forward(self, x1, x1_f, x1_t, x1_mask, x2, x2_t, x2_mask):
         """Inputs:
         x1 = document word indices             [batch * len_d]
         x1_f = document word features indices  [batch * len_d * nfeat]
@@ -114,58 +97,44 @@ class RnnSentSelector(nn.Module):
         x2_mask = question padding mask        [batch * len_q]
         """
         # Embed both document and question
-        x1_emb = self.embedding(x1)
-        x2_emb = self.embedding(x2)
-
-        # Maximum sentences in batch
-        max_sent = x1_emb.shape[1]
-        batch_size = x1_emb.shape[0]
-
-        # Dropout on embeddings
-        if self.args.dropout_emb > 0:
-            x1_emb = nn.functional.dropout(x1_emb, p=self.args.dropout_emb,
-                                           training=self.training)
-            x2_emb = nn.functional.dropout(x2_emb, p=self.args.dropout_emb,
-                                           training=self.training)
+        # x1_emb = self.embedding(x1)
+        # x2_emb = self.embedding(x2)
+        #
+        # # Dropout on embeddings
+        # if self.args.dropout_emb > 0:
+        #     x1_emb = nn.functional.dropout(x1_emb, p=self.args.dropout_emb,
+        #                                    training=self.training)
+        #     x2_emb = nn.functional.dropout(x2_emb, p=self.args.dropout_emb,
+        #                                    training=self.training)
 
         # Form document encoding inputs
-        drnn_input = [x1_emb]
+        # drnn_input = [x1_emb]
 
-        # Add attention-weighted question representation
-        if self.args.use_qemb:
-            x2_weighted_emb = self.qemb_match(x1_emb, x2_emb, x2_mask)
-            drnn_input.append(x2_weighted_emb)
-
-        # Add manual features
-        if self.args.num_features > 0:
-            drnn_input.append(x1_f)
+        ## Can be added post encoding
+        # # Add attention-weighted question representation
+        # if self.args.use_qemb:
+        #     x2_weighted_emb = self.qemb_match(x1_emb, x2_emb, x2_mask)
+        #     drnn_input.append(x2_weighted_emb)
+        #
+        # # Add manual features
+        # if self.args.num_features > 0:
+        #     drnn_input.append(x1_f)
 
         # Encode document with RNN
-        doc_hiddens = self.doc_rnn(torch.cat(drnn_input, 2), x1_mask)
+        doc_hiddens = self.doc_rnn(x1_t)['elmo_representations'][0]
 
         # Encode question with RNN + merge hiddens
-        question_hiddens = self.question_rnn(x2_emb, x2_mask)
+        question_hiddens = self.question_rnn(x2_t)['elmo_representations'][0]
+
         if self.args.question_merge == 'avg':
             q_merge_weights = layers.uniform_weights(question_hiddens, x2_mask)
         elif self.args.question_merge == 'self_attn':
             q_merge_weights = self.self_attn(question_hiddens, x2_mask)
         question_hidden = layers.weighted_avg(question_hiddens, q_merge_weights)
 
+        # Predict start and end positions
+        start_scores = self.start_attn(doc_hiddens, question_hidden, x1_mask)
+        end_scores = self.end_attn(doc_hiddens, question_hidden, x1_mask)
 
-        ### Simple document encoding ###
-        # d_merge_weights = layers.uniform_weights(doc_hiddens, x1_mask_flattened)
-        # d_merge_weights = self.self_attn_document(doc_hiddens, x1_mask_flattened)
-        # docs_hidden = layers.weighted_avg(doc_hiddens, d_merge_weights)
-        # relevance_scores = self.relevance_scorer1(docs_hidden, question_hidden).view(batch_size, max_sent, -1).squeeze(2)
-
-
-        ### Fancy interaction between question and hidden layer ###
-        # Repeat question_hidden for sequence length of document
-        question_hidden_expaned = question_hidden.unsqueeze(1).expand(question_hidden.shape[0], doc_hiddens.shape[1], question_hidden.shape[1]).contiguous()
-        scores = self.sentence_scorer(doc_hiddens, question_hidden_expaned)
-        # Max of the scores (needs to be masked)
-        max_scores = \
-        scores.data.masked_fill_(x1_mask.unsqueeze(-1).expand(scores.size()).data, -float("inf")).max(1)[0]
-        # Weight vector to predict 2 values
-        relevance_scores = self.relevance_scorer(max_scores)
-        return relevance_scores.squeeze(-1)
+        # some scores are being returned that are infinity
+        return start_scores, end_scores

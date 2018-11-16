@@ -31,13 +31,6 @@ def load_data(args, filename, skip_no_answer=False):
     with open(filename) as f:
         examples = [json.loads(line) for line in f]
 
-    if args.truncate_data:
-        if "train" in filename:
-            examples = examples[:50]
-        else:
-            examples = examples[:10]
-
-
     # Make case insensitive?
     if args.uncased_question or args.uncased_doc:
         for ex in examples:
@@ -45,6 +38,7 @@ def load_data(args, filename, skip_no_answer=False):
                 ex['question'] = [w.lower() for w in ex['question']]
             if args.uncased_doc:
                 ex['document'] = [w.lower() for w in ex['document']]
+            ## Adding Sentence Selection pipeline
             if args.uncased_doc:
                 ex['sentences'] = [[w.lower() for w in sent] for sent in ex['sentences']]
 
