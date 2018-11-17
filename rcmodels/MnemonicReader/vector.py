@@ -309,7 +309,7 @@ def vectorize(ex, model, single_answer=False):
                 new_end = answer[1] - window[0]
                 flag = False
                 break
-            elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top_sentence[0] + 1][1]:
+            elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top_sentence[0] + 1][1] and answer[0] > window[1]:
                 new_start = answer[0] - window[0]
                 new_end = window[1] - window[0] - 1
                 flag = False
@@ -326,7 +326,7 @@ def vectorize(ex, model, single_answer=False):
                     if answer[0] >= window[0] and answer[1] < window[1]:
                         new_start.append(answer[0] - window[0])
                         new_end.append(answer[1] - window[0])
-                    elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top + 1][1]:
+                    elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top + 1][1] and answer[0] < window[1]:
                         new_start.append(answer[0] - window[0])
                         new_end.append(answer[1] - window[1])
 
@@ -429,6 +429,8 @@ def batchify(batch):
     NUM_INPUTS = 7
     NUM_TARGETS = 2
     NUM_EXTRA = 1
+    
+    batch = [ex for ex in batch if len(ex) != 0]
 
     docs = [ex[0] for ex in batch]
     doc_chars = [ex[1] for ex in batch]
