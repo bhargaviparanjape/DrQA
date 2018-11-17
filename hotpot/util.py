@@ -45,17 +45,30 @@ class DataIterator(object):
         self.shuffle = shuffle
 
     def __iter__(self):
-        context_idxs = torch.LongTensor(self.bsz, self.para_limit).cuda()
-        ques_idxs = torch.LongTensor(self.bsz, self.ques_limit).cuda()
-        context_char_idxs = torch.LongTensor(self.bsz, self.para_limit, self.char_limit).cuda()
-        ques_char_idxs = torch.LongTensor(self.bsz, self.ques_limit, self.char_limit).cuda()
-        y1 = torch.LongTensor(self.bsz).cuda()
-        y2 = torch.LongTensor(self.bsz).cuda()
-        q_type = torch.LongTensor(self.bsz).cuda()
-        start_mapping = torch.Tensor(self.bsz, self.para_limit, self.sent_limit).cuda()
-        end_mapping = torch.Tensor(self.bsz, self.para_limit, self.sent_limit).cuda()
-        all_mapping = torch.Tensor(self.bsz, self.para_limit, self.sent_limit).cuda()
-        is_support = torch.LongTensor(self.bsz, self.sent_limit).cuda()
+        if torch.cuda.is_available():
+            context_idxs = torch.LongTensor(self.bsz, self.para_limit).cuda()
+            ques_idxs = torch.LongTensor(self.bsz, self.ques_limit).cuda()
+            context_char_idxs = torch.LongTensor(self.bsz, self.para_limit, self.char_limit).cuda()
+            ques_char_idxs = torch.LongTensor(self.bsz, self.ques_limit, self.char_limit).cuda()
+            y1 = torch.LongTensor(self.bsz).cuda()
+            y2 = torch.LongTensor(self.bsz).cuda()
+            q_type = torch.LongTensor(self.bsz).cuda()
+            start_mapping = torch.Tensor(self.bsz, self.para_limit, self.sent_limit).cuda()
+            end_mapping = torch.Tensor(self.bsz, self.para_limit, self.sent_limit).cuda()
+            all_mapping = torch.Tensor(self.bsz, self.para_limit, self.sent_limit).cuda()
+            is_support = torch.LongTensor(self.bsz, self.sent_limit).cuda()
+        else:
+            context_idxs = torch.LongTensor(self.bsz, self.para_limit)
+            ques_idxs = torch.LongTensor(self.bsz, self.ques_limit)
+            context_char_idxs = torch.LongTensor(self.bsz, self.para_limit, self.char_limit)
+            ques_char_idxs = torch.LongTensor(self.bsz, self.ques_limit, self.char_limit)
+            y1 = torch.LongTensor(self.bsz)
+            y2 = torch.LongTensor(self.bsz)
+            q_type = torch.LongTensor(self.bsz)
+            start_mapping = torch.Tensor(self.bsz, self.para_limit, self.sent_limit)
+            end_mapping = torch.Tensor(self.bsz, self.para_limit, self.sent_limit)
+            all_mapping = torch.Tensor(self.bsz, self.para_limit, self.sent_limit)
+            is_support = torch.LongTensor(self.bsz, self.sent_limit)
 
         while True:
             if len(self.bkt_pool) == 0: break

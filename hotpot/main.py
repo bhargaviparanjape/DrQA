@@ -22,9 +22,11 @@ test_record_file = 'test_record.pkl'
 
 
 parser.add_argument('--mode', type=str, default='train')
-parser.add_argument('--data_file', type=str)
+parser.add_argument('--data_file', type=str, default='hotpot_train_v1.1.json')
+parser.add_argument('--data_dir', type=str, default="data")
 parser.add_argument('--glove_word_file', type=str, default=glove_word_file)
 parser.add_argument('--save', type=str, default='HOTPOT')
+parser.add_argument('--truncate', action="store_true", default=False)
 
 parser.add_argument('--word_emb_file', type=str, default=word_emb_file)
 parser.add_argument('--char_emb_file', type=str, default=char_emb_file)
@@ -79,6 +81,21 @@ config.test_record_file = _concat(config.test_record_file)
 # config.train_eval_file = _concat(config.train_eval_file)
 config.dev_eval_file = _concat(config.dev_eval_file)
 config.test_eval_file = _concat(config.test_eval_file)
+
+# Add directory to all files
+config.data_file = os.path.join(config.data_dir, config.data_file)
+config.word_emb_file = os.path.join(config.data_dir, config.word_emb_file)
+config.char_emb_file = os.path.join(config.data_dir, config.char_emb_file)
+config.train_eval_file = os.path.join(config.data_dir, config.train_eval_file)
+config.dev_eval_file = os.path.join(config.data_dir, config.dev_eval_file)
+config.test_eval_file = os.path.join(config.data_dir, config.test_eval_file)
+config.word2idx_file = os.path.join(config.data_dir, config.word2idx_file)
+config.char2idx_file = os.path.join(config.data_dir, config.char2idx_file)
+config.idx2word_file = os.path.join(config.data_dir, config.idx2word_file)
+config.idx2char_file = os.path.join(config.data_dir, config.idx2char_file)
+config.train_record_file = os.path.join(config.data_dir, config.train_record_file)
+config.dev_record_file = os.path.join(config.data_dir, config.dev_record_file)
+config.test_record_file = os.path.join(config.data_dir, config.test_record_file)
 
 if config.mode == 'train':
     train(config)

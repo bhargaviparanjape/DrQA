@@ -78,8 +78,9 @@ def train(config):
         model = Model(config, word_mat, char_mat)
 
     logging('nparams {}'.format(sum([p.nelement() for p in model.parameters() if p.requires_grad])))
-    ori_model = model.cuda()
-    model = nn.DataParallel(ori_model)
+    if torch.cuda.is_available():
+        ori_model = model.cuda()
+        model = nn.DataParallel(ori_model)
 
     lr = config.init_lr
     optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=config.init_lr)
@@ -265,8 +266,9 @@ def test(config):
         model = SPModel(config, word_mat, char_mat)
     else:
         model = Model(config, word_mat, char_mat)
-    ori_model = model.cuda()
-    ori_model.load_state_dict(torch.load(os.path.join(config.save, 'model.pt')))
+    if torch.cuda.is_available():
+        ori_model = model.cuda()
+        ori_model.load_state_dict(torch.load(os.path.join(config.save, 'model.pt')))
     model = nn.DataParallel(ori_model)
 
     model.eval()
