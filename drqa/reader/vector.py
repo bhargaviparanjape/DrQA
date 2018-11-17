@@ -248,8 +248,6 @@ def vectorize(ex, model, single_answer=False):
             else:
                 # use K sentences
                 top_sentence = model.sentence_selector.predict(ex_batch, top_n = args.select_k)[0]
-            #if len(ex['gold_sentence_ids']) > 0 and top_sentence not in ex['gold_sentence_ids']:
-            #    return []
         # Extract top sentence and change ex["document"] accordingly
         tokens = []
         pos = []
@@ -263,7 +261,7 @@ def vectorize(ex, model, single_answer=False):
             pos += ex['pos'][window[0]:window[1]]
             ner += ex['ner'][window[0]:window[1]]
             lemma += ex['lemma'][window[0]:window[1]]
-            offset_subset += ex["offsets"][sentence_boundaries[t][0]:sentence_boundaries[t][1]]
+            offset_subset += ex["offsets"][window[0]:window[1]]
 
         document = torch.LongTensor([word_dict[w] for w in tokens])
         ex['document'] = tokens
@@ -273,24 +271,32 @@ def vectorize(ex, model, single_answer=False):
         selected_offset = offset_subset
 
         # Check if selected sentence contains any answer span
-        # account for answers being in between the gold sentence
-
-        flag = True
-        window = sentence_boundaries[top_sentence[0]]
-        for answer in ex['answers']:
-            if answer[0] >= window[0] and answer[1] < window[1]:
-                new_start = answer[0] - window[0]
-                new_end = answer[1] - window[0]
-                flag = False
+        flag = False
+        flowing_window = 0
+        for top_id in top_sentence:
+            window = sentence_boundaries[top_id]
+            for answer in ex['answers']:
+                if answer[0] >= window[0] and answer[1] < window[1]:
+                    new_start = answer[0] - window[0]
+                    new_end = answer[1] - window[0]
+                    flag = True
+                    break
+                elif (top_id + 1 < len(sentence_boundaries)) and answer[0] >= window[0] and answer[1] < sentence_boundaries[top_id + 1][1] and answer[0] < window[1]:
+                    new_start = answer[0] - window[0]
+                    new_end = window[1] - window[0] - 1
+                    flag = True
+                    break
+            # as soon as an answer is found during training, break;
+            if flag:
+                # for relative positions of the new start and end in the combined
+                new_start += flowing_window
+                new_end += flowing_window
                 break
-            elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top_sentence[0] + 1][1] and answer[0] < window[1]:
-                new_start = answer[0] - window[0]
-                new_end = window[1] - window[0] - 1
-                flag = False
-                break
-        # Single Answer is False for development set
-        if flag and single_answer == True:
+            flowing_window += window[1] - window[0]
+        # Single Answer is False for development set; this means that no answer was retrieved for the train example
+        if not flag and single_answer == True:
             return []
+        flowing_window = 0
         if not single_answer and len(ex['answers'])> 0:
             new_start = []
             new_end = []
@@ -298,11 +304,12 @@ def vectorize(ex, model, single_answer=False):
                 window = sentence_boundaries[top]
                 for answer in ex['answers']:
                     if answer[0] >= window[0] and answer[1] < window[1]:
-                        new_start.append(answer[0] - window[0])
-                        new_end.append(answer[1] - window[0])
-                    elif answer[0] >= window[0] and answer[1] < sentence_boundaries[top + 1][1] and answer[0] < window[1]:
-                        new_start.append(answer[0] - window[0])
-                        new_end.append(answer[1] - window[1])
+                        new_start.append(answer[0] - window[0] + flowing_window)
+                        new_end.append(answer[1] - window[0] + flowing_window)
+                    elif (top_id + 1 < len(sentence_boundaries)) and answer[0] >= window[0] and answer[1] < sentence_boundaries[top + 1][1] and answer[0] < window[1]:
+                        new_start.append(answer[0] - window[0] +  flowing_window)
+                        new_end.append(answer[1] - window[1] + flowing_window)
+                flowing_window += len(window)
 
 
 

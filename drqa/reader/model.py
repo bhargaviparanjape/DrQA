@@ -70,6 +70,14 @@ class DocReader(object):
                 self.sentence_selector = SentenceSelector.load(args.sentence_selector_model)
             else:
                 self.sentence_selector = None
+            self.SENTENCE_SELECTOR_OUTPUT = None
+            if args.sentence_selector_dump:
+                SENTENCE_SELECTOR_DUMP = open(args.sentence_selector_dump).readlines()
+                self.SENTENCE_SELECTOR_OUTPUT = {}
+                for line in SENTENCE_SELECTOR_DUMP:
+                    content = line.split()
+                    selected = [int(content[1].strip()), int(content[1].strip()), int(content[1].strip())]
+                    self.SENTENCE_SELECTOR_OUTPUT[content[0].strip()] = selected
 
     def expand_dictionary(self, words):
         """Add words to the DocReader dictionary if they do not exist. The
@@ -491,7 +499,7 @@ class DocReader(object):
         return DocReader(args, word_dict, feature_dict, state_dict, normalize)
 
     @staticmethod
-    def load_checkpoint(filename, normalize=True):
+    def load_checkpoint(filename, new_args=None, normalize=True):
         logger.info('Loading model %s' % filename)
         saved_params = torch.load(
             filename, map_location=lambda storage, loc: storage
@@ -502,6 +510,8 @@ class DocReader(object):
         epoch = saved_params['epoch']
         optimizer = saved_params['optimizer']
         args = saved_params['args']
+        if new_args:
+            args = new_args
         model = DocReader(args, word_dict, feature_dict, state_dict, normalize)
         model.init_optimizer(optimizer)
         return model, epoch
