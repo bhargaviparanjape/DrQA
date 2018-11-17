@@ -1268,12 +1268,23 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 									tokens = [t for s in sentences for t in s['tokens']]
 									offsets = [(token['characterOffsetBegin'],
 									            token['characterOffsetEnd']) for token in tokens]
+
+									actual_sentences = []
+									for enum_, s in enumerate(sentence_boundaries):
+										first_token_offset = offsets[sentence_boundaries[enum_]]
+										if enum_ == len(sentence_boundaries)-1:
+											last_token_offset = offsets[-1]
+										else:
+											last_token_offset = offsets[sentence_boundaries[enum_ + 1] - 1]
+										actual_sentences.append(paragraph['context'][first_token_offset[0]:last_token_offset[1]])
+
 									## Adding many distractor sentences for newsQA
 									## Proportion of distractors == 1/5 of the number of sentences
 									num_distractors_to_add = int(0.2*len(sentences)) + 1 # ceiling
 									distractors = []
-									for do in range(num_distractors_to_add):
+									for do in range(4):
 										insert_position = numpy.random.randint(len(sentence_boundaries) + 1)
+										actual_sentences = actual_sentences[:insert_position] + [sent] + actual_sentences[insert_position:]
 										## update distractor table:
 										for enum_, position in enumerate(distractors):
 											if position >= insert_position:
@@ -1298,7 +1309,9 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 
 										new_answers = []
 										new_tokens = tokens[:next_token] + added_tokens + tokens[next_token:]
-										new_offsets = offsets[:next_token] + [(a[0]+offset_shift_added, a[1] + offset_shift_added) for a in added_offsets] + \
+										present_text = " ".join(actual_sentences)
+										new_offsets = offsets[:next_token] + \
+										              [(a[0]+offset_shift_added, a[1] + offset_shift_added) for a in added_offsets] + \
 										[(a[0] + offser_shift_rest, a[1] + offser_shift_rest) for a in offsets[next_token:]]
 										new_sentence_boundaries = sentence_boundaries[:insert_position] + [change_boundary] + \
 										                          [len(added_tokens) + s for s in sentence_boundaries[insert_position:]]
@@ -1320,6 +1333,28 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 													new_answers.append(ans)
 											else:
 												new_answers.append(ans)
+										# present_text tokenization generates samenumber of tokens as discovered before
+										# check tokens
+										check_tokens = [token for s in client.query_ner(present_text)["sentences"] for token in s['tokens']]
+
+										## During Random adversarial training ; same number of tokens were produced
+										assert len(new_tokens) == len(check_tokens)
+										## find answers for new offsets here and old offets and comapare
+										check_offsets = [(token['characterOffsetBegin'],
+									            token['characterOffsetEnd']) for token in check_tokens]
+										found = find_answer(offsets, ans['answer_start'],
+										                                     ans['answer_start'] + len(ans['text']))
+										if found:
+											start_token, end_token = found
+											new_start_token, new_end_token = find_answer(check_offsets,
+											                                             new_answers[-1]['answer_start'],
+											                                             new_answers[-1][
+												                                             'answer_start'] + len(
+												                                             ans['text']))
+											start_token, end_token = find_answer(offsets,ans['answer_start'], ans['answer_start'] + len(ans['text']))
+											assert [t['word'] for t in tokens[start_token:end_token]] == [t['word'] for t in
+										                                                              new_tokens[
+										                                                              new_start_token:new_end_token]]
 										qa['answers'] = new_answers
 										# tokens : new tokens
 										tokens = new_tokens
@@ -1327,6 +1362,8 @@ def dump_data(dataset, prefix, use_answer_placeholder=False, alteration_strategy
 										offsets = new_offsets
 										# sentence boundaries
 										sentence_boundaries = new_sentence_boundaries
+
+
 									cur_text = " ".join([token['word'] for token in new_tokens])
 									cur_qa['answers'] = new_answers
 								else:
