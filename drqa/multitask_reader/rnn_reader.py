@@ -150,16 +150,10 @@ class RnnDocReader(nn.Module):
                                               index=x1_idx[:,:,1].unsqueeze(-1).expand(-1,-1, self.doc_hidden_size))
 
         sp_output = torch.cat([start_sentence_embedding, end_sentence_embedding], dim=-1)
-
-        # predict as a subtask; input information into final span prediction model
-        # if self.training:
-        #     ## bilinear interaction between question and representation to reinforce the question again
-        #     support_scores = F.logsigmoid(self.sp_linear(sp_output).squeeze(2))
-        # else:
-        #     support_scores = F.sigmoid(self.sp_linear(sp_output).squeeze(2))
         question_hidden_expaned = question_hidden.unsqueeze(1).expand(-1, sp_output.shape[1], -1).contiguous()
         support_scores = self.sp_bilinear(sp_output, question_hidden_expaned).squeeze(2)
-        support_scores.masked_fill_(x1_idxmask.data, -float('inf')) # log probability is 0 if masked
+        # support_scores.masked_fill_(x1_idxmask.data, -float('inf'))  # make the probability of invalids 0
+        support_scores = F.sigmoid(support_scores)
 
         # Addition 1
         # Incorporate information about the correct sentence into token representation: Average SP Embeddings are placed alongside (every token gets the corresponding sentence representation for it)

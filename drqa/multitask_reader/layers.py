@@ -427,10 +427,7 @@ class BilinearSeq(nn.Module):
 
 	def forward(self, input1, input2):
 		raw_scores = self.bilinear(input1, input2)
-		if self.training:
-			return F.logsigmoid(raw_scores)
-		else:
-			return F.sigmoid(raw_scores)
+		return raw_scores
 
 
 

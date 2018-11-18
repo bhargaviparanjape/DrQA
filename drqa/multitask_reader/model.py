@@ -78,6 +78,7 @@ class DocReader(object):
                     content = line.split()
                     selected = [int(content[1].strip()), int(content[1].strip()), int(content[1].strip())]
                     self.SENTENCE_SELECTOR_OUTPUT[content[0].strip()] = selected
+        self.BCELoss = torch.nn.BCELoss(reduce=False)
 
     def expand_dictionary(self, words):
         """Add words to the DocReader dictionary if they do not exist. The
@@ -235,12 +236,21 @@ class DocReader(object):
             target_e = Variable(ex[8])
             target_sp = Variable(ex[9])
 
+
         # Run forward
         score_s, score_e, score_sp = self.network(*inputs)
 
         # Compute loss and accuracies
         # assertion error problems
-        loss = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)  + self.args.sp_lambda * F.nll_loss(score_sp, target_sp)
+        loss_span = F.nll_loss(score_s, target_s) + F.nll_loss(score_e, target_e)
+        # binary cross entropy required
+        target_bce_sp = torch.FloatTensor(score_sp.size()).zero_()
+        for i in range(target_bce_sp.size(0)):
+            target_bce_sp[i, target_sp[i]] = 1
+        sentence_mask = 1-inputs[4].float()
+        loss_sentence_select = (self.BCELoss(score_sp, target_bce_sp) * sentence_mask).sum()/sentence_mask.sum()
+
+        loss = loss_span + self.args.sp_lambda * loss_sentence_select
 
         # Clear gradients and run backward
         self.optimizer.zero_grad()
@@ -345,7 +355,9 @@ class DocReader(object):
         # Decode predictions
         score_s = score_s.data.cpu()
         score_e = score_e.data.cpu()
+        score_sp.masked_fill_(inputs[4].data, -float('inf'))
         score_sp = score_sp.data.cpu()
+
         if candidates:
             args = (score_s, score_e, candidates, top_n, self.args.max_len)
             if async_pool:
