@@ -95,6 +95,12 @@ class RnnDocReader(nn.Module):
             nn.Linear(2*doc_hidden_size, 1),
         )
 
+        self.sp_bilinear = layers.BilinearSeq(
+            2*doc_hidden_size,
+            question_hidden_size,
+            1,
+        )
+
     def forward(self, x1, x1_f, x1_mask, x1_idx, x1_idxmask, x2, x2_mask):
         """Inputs:
         x1 = document word indices             [batch * len_d]
@@ -146,10 +152,13 @@ class RnnDocReader(nn.Module):
         sp_output = torch.cat([start_sentence_embedding, end_sentence_embedding], dim=-1)
 
         # predict as a subtask; input information into final span prediction model
-        if self.training:
-            support_scores = F.logsigmoid(self.sp_linear(sp_output).squeeze(2))
-        else:
-            support_scores = F.sigmoid(self.sp_linear(sp_output).squeeze(2))
+        # if self.training:
+        #     ## bilinear interaction between question and representation to reinforce the question again
+        #     support_scores = F.logsigmoid(self.sp_linear(sp_output).squeeze(2))
+        # else:
+        #     support_scores = F.sigmoid(self.sp_linear(sp_output).squeeze(2))
+        question_hidden_expaned = question_hidden.unsqueeze(1).expand(-1, sp_output.shape[1], -1).contiguous()
+        support_scores = self.sp_bilinear(sp_output, question_hidden_expaned).squeeze(2)
         support_scores.masked_fill_(x1_idxmask.data, -float('inf')) # log probability is 0 if masked
 
         # Addition 1

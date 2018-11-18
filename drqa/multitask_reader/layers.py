@@ -420,6 +420,20 @@ class BilinearSeqAttn(nn.Module):
 		return alpha
 
 
+class BilinearSeq(nn.Module):
+	def __init__(self, x1_size, x2_size, y_size):
+		super(BilinearSeq, self).__init__()
+		self.bilinear = nn.Bilinear(x1_size, x2_size, y_size)
+
+	def forward(self, input1, input2):
+		raw_scores = self.bilinear(input1, input2)
+		if self.training:
+			return F.logsigmoid(raw_scores)
+		else:
+			return F.sigmoid(raw_scores)
+
+
+
 class LinearSeqAttn(nn.Module):
 	"""Self attention over a sequence:
 
