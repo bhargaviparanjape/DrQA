@@ -8,6 +8,7 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from . import layers
 
 # ------------------------------------------------------------------------------
@@ -64,11 +65,13 @@ class RnnDocReader(nn.Module):
         # Output sizes of rnn encoders
         doc_hidden_size = 2 * args.hidden_size
         question_hidden_size = 2 * args.hidden_size
-        self.doc_hidden_size = 2 * args.hidden_size
-        self.question_hidden_size = 2 * args.hidden_size
+
         if args.concat_rnn_layers:
             doc_hidden_size *= args.doc_layers
             question_hidden_size *= args.question_layers
+
+        self.doc_hidden_size = doc_hidden_size
+        self.question_hidden_size = question_hidden_size
 
         # Question merging
         if args.question_merge not in ['avg', 'self_attn']:
@@ -88,7 +91,9 @@ class RnnDocReader(nn.Module):
             normalize=normalize,
         )
 
-        self.sp_linear = nn.Linear(2*doc_hidden_size, 1)
+        self.sp_linear = nn.Sequential(
+            nn.Linear(2*doc_hidden_size, 1),
+        )
 
     def forward(self, x1, x1_f, x1_mask, x1_idx, x1_idxmask, x2, x2_mask):
         """Inputs:
@@ -141,8 +146,14 @@ class RnnDocReader(nn.Module):
         sp_output = torch.cat([start_sentence_embedding, end_sentence_embedding], dim=-1)
 
         # predict as a subtask; input information into final span prediction model
-        support_scores = self.sp_linear(sp_output).squeeze(2)
+        if self.training:
+            support_scores = F.logsigmoid(self.sp_linear(sp_output).squeeze(2))
+        else:
+            support_scores = F.sigmoid(self.sp_linear(sp_output).squeeze(2))
         support_scores.masked_fill_(x1_idxmask.data, -float('inf')) # log probability is 0 if masked
+
+        # Addition 1
+        # Incorporate information about the correct sentence into token representation: Average SP Embeddings are placed alongside (every token gets the corresponding sentence representation for it)
 
         # Predict start and end positions
         start_scores = self.start_attn(doc_hiddens, question_hidden, x1_mask)
