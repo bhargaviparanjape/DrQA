@@ -177,6 +177,7 @@ def evaluate(eval_file, answer_dict):
     for key, value in answer_dict.items():
         total += 1
         ground_truths = eval_file[key]["answer"]
+        ## id (if it contains high-conf only then consider the example)
         prediction = value
         assert len(ground_truths) == 1
         cur_EM = exact_match_score(prediction, ground_truths[0])

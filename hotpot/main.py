@@ -22,6 +22,7 @@ test_record_file = 'test_record.pkl'
 
 
 parser.add_argument('--mode', type=str, default='train')
+parser.add_argument('--dataset', type=str, default='squad')
 parser.add_argument('--data_file', type=str, default='hotpot_train_v1.1.json')
 parser.add_argument('--data_dir', type=str, default="data")
 parser.add_argument('--glove_word_file', type=str, default=glove_word_file)
